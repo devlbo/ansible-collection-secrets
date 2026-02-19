@@ -1,0 +1,803 @@
+---
+# devlbo.secrets.ssh_keys - Molecule verify playbook
+#
+# Asserts outcomes (files exist with correct names and permissions,
+# SOPS metadata present) not mechanisms (specific task ran).
+
+- name: Verify
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+
+  tasks:
+
+    # === TC-SSH-010 | Full config path mode ===================================
+
+    - name: "Verify | TC-SSH-010 | Stat SOPS file | sysadmin"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_010__dir }}/id_ed25519_sysadmin_prod.sops.yaml"
+      register: __ssh_keys__tc_010__sysadmin_sops
+
+    - name: "Verify | TC-SSH-010 | Assert SOPS file present | sysadmin"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_010__sysadmin_sops.stat.exists
+        fail_msg: "TC-SSH-010: id_ed25519_sysadmin_prod.sops.yaml missing"
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Decrypt SOPS file | sysadmin"
+      ansible.builtin.command:
+        cmd: >-
+          sops decrypt
+          {{ __ssh_keys__tc_010__dir }}/id_ed25519_sysadmin_prod.sops.yaml
+      register: __ssh_keys__tc_010__sysadmin_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __ssh_keys__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-SSH-010 | Assert path mode fields present | sysadmin"
+      ansible.builtin.assert:
+        that:
+          - >-
+            'ssh_private_key_path:' in
+            __ssh_keys__tc_010__sysadmin_decrypted.stdout
+          - >-
+            'BEGIN OPENSSH PRIVATE KEY' not in
+            __ssh_keys__tc_010__sysadmin_decrypted.stdout
+        fail_msg: >-
+          TC-SSH-010: sysadmin SOPS should contain ssh_private_key_path and
+          NOT contain raw private key content
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Assert passphrase present | sysadmin"
+      ansible.builtin.assert:
+        that:
+          - "'ssh_passphrase:' in __ssh_keys__tc_010__sysadmin_decrypted.stdout"
+        fail_msg: >-
+          TC-SSH-010: sysadmin SOPS should contain ssh_passphrase
+          (passphrase enabled)
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Assert metadata absent | sysadmin"
+      ansible.builtin.assert:
+        that:
+          - "'metadata:' not in __ssh_keys__tc_010__sysadmin_decrypted.stdout"
+        fail_msg: >-
+          TC-SSH-010: sysadmin SOPS should NOT contain metadata
+          when not provided
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Stat SSH private key | sysadmin"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_010__dir }}/id_ed25519_sysadmin_prod"
+      register: __ssh_keys__tc_010__sysadmin_privkey
+
+    - name: "Verify | TC-SSH-010 | Assert SSH private key present | sysadmin"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_010__sysadmin_privkey.stat.exists
+          - __ssh_keys__tc_010__sysadmin_privkey.stat.mode == '0600'
+        fail_msg: >-
+          TC-SSH-010: sysadmin custom SSH key missing or wrong permissions
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Stat SSH public key | sysadmin"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_010__dir }}/id_ed25519_sysadmin_prod.pub"
+      register: __ssh_keys__tc_010__sysadmin_pubkey
+
+    - name: "Verify | TC-SSH-010 | Assert SSH public key present | sysadmin"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_010__sysadmin_pubkey.stat.exists
+        fail_msg: "TC-SSH-010: sysadmin custom SSH public key missing"
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Assert custom comment | sysadmin"
+      ansible.builtin.command:
+        cmd: >-
+          grep -q 'sysadmin@mycompany.com'
+          {{ __ssh_keys__tc_010__dir }}/id_ed25519_sysadmin_prod.pub
+      register: __ssh_keys__tc_010__sysadmin_comment
+      changed_when: false
+      failed_when: __ssh_keys__tc_010__sysadmin_comment.rc != 0
+
+    - name: "Verify | TC-SSH-010 | Stat SOPS file | deploy"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_010__dir }}/id_ed25519_deploy.sops.yaml"
+      register: __ssh_keys__tc_010__deploy_sops
+
+    - name: "Verify | TC-SSH-010 | Assert SOPS file present | deploy"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_010__deploy_sops.stat.exists
+        fail_msg: "TC-SSH-010: id_ed25519_deploy.sops.yaml missing"
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Decrypt SOPS file | deploy"
+      ansible.builtin.command:
+        cmd: >-
+          sops decrypt
+          {{ __ssh_keys__tc_010__dir }}/id_ed25519_deploy.sops.yaml
+      register: __ssh_keys__tc_010__deploy_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __ssh_keys__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-SSH-010 | Assert passphrase absent | deploy"
+      ansible.builtin.assert:
+        that:
+          - >-
+            'ssh_passphrase:' not in
+            __ssh_keys__tc_010__deploy_decrypted.stdout
+        fail_msg: >-
+          TC-SSH-010: deploy SOPS should NOT contain ssh_passphrase
+          (passphrase=false)
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Assert metadata absent | deploy"
+      ansible.builtin.assert:
+        that:
+          - "'metadata:' not in __ssh_keys__tc_010__deploy_decrypted.stdout"
+        fail_msg: >-
+          TC-SSH-010: deploy SOPS should NOT contain metadata
+          when not provided
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Stat SSH private key | deploy"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_010__dir }}/id_ed25519_deploy"
+      register: __ssh_keys__tc_010__deploy_privkey
+
+    - name: "Verify | TC-SSH-010 | Assert SSH private key present | deploy"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_010__deploy_privkey.stat.exists
+        fail_msg: "TC-SSH-010: deploy SSH private key missing"
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Stat SOPS file | automation"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_010__dir }}/id_ed25519_automation.sops.yaml"
+      register: __ssh_keys__tc_010__automation_sops
+
+    - name: "Verify | TC-SSH-010 | Assert SOPS file present | automation"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_010__automation_sops.stat.exists
+        fail_msg: "TC-SSH-010: id_ed25519_automation.sops.yaml missing"
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Stat SSH private key | automation"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_010__dir }}/id_ed25519_automation"
+      register: __ssh_keys__tc_010__automation_privkey
+
+    - name: "Verify | TC-SSH-010 | Assert SSH private key present | automation"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_010__automation_privkey.stat.exists
+        fail_msg: "TC-SSH-010: automation SSH private key missing"
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Stat SOPS file | webapp"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_010__dir }}/id_ed25519_webapp.sops.yaml"
+      register: __ssh_keys__tc_010__webapp_sops
+
+    - name: "Verify | TC-SSH-010 | Assert SOPS file present | webapp"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_010__webapp_sops.stat.exists
+        fail_msg: "TC-SSH-010: id_ed25519_webapp.sops.yaml missing"
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Decrypt SOPS file | webapp"
+      ansible.builtin.command:
+        cmd: >-
+          sops decrypt
+          {{ __ssh_keys__tc_010__dir }}/id_ed25519_webapp.sops.yaml
+      register: __ssh_keys__tc_010__webapp_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __ssh_keys__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-SSH-010 | Assert metadata present | webapp"
+      ansible.builtin.assert:
+        that:
+          - "'metadata:' in __ssh_keys__tc_010__webapp_decrypted.stdout"
+          - "'url:' in __ssh_keys__tc_010__webapp_decrypted.stdout"
+          - "'environment:' in __ssh_keys__tc_010__webapp_decrypted.stdout"
+        fail_msg: >-
+          TC-SSH-010: webapp SOPS should contain metadata with
+          url and environment
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Assert passphrase present | webapp"
+      ansible.builtin.assert:
+        that:
+          - "'ssh_passphrase:' in __ssh_keys__tc_010__webapp_decrypted.stdout"
+        fail_msg: >-
+          TC-SSH-010: webapp SOPS should contain ssh_passphrase
+          (passphrase enabled)
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Stat SSH private key | webapp"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_010__dir }}/id_ed25519_webapp"
+      register: __ssh_keys__tc_010__webapp_privkey
+
+    - name: "Verify | TC-SSH-010 | Assert SSH private key present | webapp"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_010__webapp_privkey.stat.exists
+        fail_msg: "TC-SSH-010: webapp SSH private key missing"
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Stat SOPS file | old_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_010__dir }}/id_ed25519_old_user.sops.yaml"
+      register: __ssh_keys__tc_010__old_user_sops
+
+    - name: "Verify | TC-SSH-010 | Assert SOPS file absent | old_user"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_010__old_user_sops.stat.exists
+        fail_msg: >-
+          TC-SSH-010: id_ed25519_old_user.sops.yaml should have been removed
+        quiet: true
+
+    - name: "Verify | TC-SSH-010 | Find leftover plaintext files | cleanup"
+      ansible.builtin.find:
+        paths: "{{ __ssh_keys__tc_010__dir }}"
+        patterns: "*_plaintext.yaml"
+      register: __ssh_keys__tc_010__plaintext_files
+
+    - name: "Verify | TC-SSH-010 | Assert no plaintext files remain | cleanup"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_010__plaintext_files.files | length == 0
+        fail_msg: >-
+          TC-SSH-010: Found leftover plaintext files:
+          {{
+            __ssh_keys__tc_010__plaintext_files.files
+            | map(attribute='path')
+            | list
+          }}
+        quiet: true
+
+    # === TC-SSH-020 | Content mode ============================================
+
+    - name: "Verify | TC-SSH-020 | Stat SOPS file | content_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_020__dir }}/id_ed25519_content_user.sops.yaml"
+      register: __ssh_keys__tc_020__content_user_sops
+
+    - name: "Verify | TC-SSH-020 | Assert SOPS file present | content_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_020__content_user_sops.stat.exists
+        fail_msg: "TC-SSH-020: id_ed25519_content_user.sops.yaml missing"
+        quiet: true
+
+    - name: "Verify | TC-SSH-020 | Decrypt SOPS file | content_user"
+      ansible.builtin.command:
+        cmd: >-
+          sops decrypt
+          {{ __ssh_keys__tc_020__dir }}/id_ed25519_content_user.sops.yaml
+      register: __ssh_keys__tc_020__content_user_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __ssh_keys__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-SSH-020 | Assert fields present | content_user"
+      ansible.builtin.assert:
+        that:
+          - >-
+            'ssh_private_key:' in
+            __ssh_keys__tc_020__content_user_decrypted.stdout
+          - >-
+            'BEGIN OPENSSH PRIVATE KEY' in
+            __ssh_keys__tc_020__content_user_decrypted.stdout
+          - >-
+            'ssh_private_key_path:' in
+            __ssh_keys__tc_020__content_user_decrypted.stdout
+        fail_msg: >-
+          TC-SSH-020: content_user SOPS should contain both ssh_private_key
+          (raw PEM) and ssh_private_key_path
+        quiet: true
+
+    - name: "Verify | TC-SSH-020 | Stat SSH private key | content_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_020__dir }}/id_ed25519_content_user"
+      register: __ssh_keys__tc_020__content_user_privkey
+
+    - name: "Verify | TC-SSH-020 | Assert private key present | content_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_020__content_user_privkey.stat.exists
+          - __ssh_keys__tc_020__content_user_privkey.stat.mode == '0600'
+        fail_msg: >-
+          TC-SSH-020: content_user SSH key missing or wrong permissions
+        quiet: true
+
+    # === TC-SSH-030 | Content mode with passphrase ============================
+
+    - name: "Verify | TC-SSH-030 | Stat SOPS file | persist_user"
+      ansible.builtin.stat:
+        path: >-
+          {{ __ssh_keys__tc_030__dir
+          }}/id_ed25519_persist_user.sops.yaml
+      register: __ssh_keys__tc_030__content_persist_sops
+
+    - name: "Verify | TC-SSH-030 | Assert SOPS file present | persist_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_030__content_persist_sops.stat.exists
+        fail_msg: >-
+          TC-SSH-030: id_ed25519_persist_user.sops.yaml missing
+        quiet: true
+
+    - name: "Verify | TC-SSH-030 | Decrypt SOPS file | persist_user"
+      ansible.builtin.command:
+        cmd: >-
+          sops decrypt
+          {{ __ssh_keys__tc_030__dir
+          }}/id_ed25519_persist_user.sops.yaml
+      register: __ssh_keys__tc_030__content_persist_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __ssh_keys__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-SSH-030 | Assert fields present | persist_user"
+      ansible.builtin.assert:
+        that:
+          - >-
+            'ssh_private_key:' in
+            __ssh_keys__tc_030__content_persist_decrypted.stdout
+          - >-
+            'BEGIN OPENSSH PRIVATE KEY' in
+            __ssh_keys__tc_030__content_persist_decrypted.stdout
+          - >-
+            'ssh_private_key_path:' in
+            __ssh_keys__tc_030__content_persist_decrypted.stdout
+        fail_msg: >-
+          TC-SSH-030: persist_user SOPS should contain ssh_private_key
+          (raw PEM) and ssh_private_key_path
+        quiet: true
+
+    - name: "Verify | TC-SSH-030 | Assert passphrase present | persist_user"
+      ansible.builtin.assert:
+        that:
+          - >-
+            'ssh_passphrase:' in
+            __ssh_keys__tc_030__content_persist_decrypted.stdout
+        fail_msg: >-
+          TC-SSH-030: persist_user SOPS should contain ssh_passphrase
+          (passphrase enabled)
+        quiet: true
+
+    - name: "Verify | TC-SSH-030 | Stat SSH private key | persist_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_030__dir }}/id_ed25519_persist_user"
+      register: __ssh_keys__tc_030__content_persist_privkey
+
+    - name: "Verify | TC-SSH-030 | Assert private key present | persist_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_030__content_persist_privkey.stat.exists
+          - __ssh_keys__tc_030__content_persist_privkey.stat.mode == '0600'
+        fail_msg: >-
+          TC-SSH-030: persist_user SSH key missing or wrong permissions
+        quiet: true
+
+    # === TC-SSH-040 | Empty users list ========================================
+
+    - name: "Verify | TC-SSH-040 | Stat output dir | empty users"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_040__dir }}"
+      register: __ssh_keys__tc_040__output_dir
+
+    - name: "Verify | TC-SSH-040 | Assert output dir absent | empty users"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_040__output_dir.stat.exists
+        fail_msg: >-
+          TC-SSH-040: Output directory should not be created when
+          ssh_keys__users is empty
+        quiet: true
+
+    # === TC-SSH-050 | Global absent state =====================================
+
+    - name: "Verify | TC-SSH-050 | Stat SOPS file | absent_user_a"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_050__dir }}/id_ed25519_absent_user_a.sops.yaml"
+      register: __ssh_keys__tc_050__absent_user_a_sops
+
+    - name: "Verify | TC-SSH-050 | Assert SOPS file absent | absent_user_a"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_050__absent_user_a_sops.stat.exists
+        fail_msg: >-
+          TC-SSH-050: id_ed25519_absent_user_a.sops.yaml should be deleted
+          (global absent)
+        quiet: true
+
+    - name: "Verify | TC-SSH-050 | Stat SSH private key | absent_user_a"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_050__dir }}/id_ed25519_absent_user_a"
+      register: __ssh_keys__tc_050__absent_user_a_privkey
+
+    - name: "Verify | TC-SSH-050 | Assert private key absent | absent_user_a"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_050__absent_user_a_privkey.stat.exists
+        fail_msg: >-
+          TC-SSH-050: id_ed25519_absent_user_a should be deleted (global absent)
+        quiet: true
+
+    - name: "Verify | TC-SSH-050 | Stat SOPS file | absent_user_b"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_050__dir }}/id_ed25519_absent_user_b.sops.yaml"
+      register: __ssh_keys__tc_050__absent_user_b_sops
+
+    - name: "Verify | TC-SSH-050 | Assert SOPS file absent | absent_user_b"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_050__absent_user_b_sops.stat.exists
+        fail_msg: >-
+          TC-SSH-050: id_ed25519_absent_user_b.sops.yaml should be deleted
+          (global absent)
+        quiet: true
+
+    # === TC-SSH-060 | Per-item absent state ===================================
+
+    - name: "Verify | TC-SSH-060 | Stat SOPS file | present_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_060__dir }}/id_ed25519_present_user.sops.yaml"
+      register: __ssh_keys__tc_060__present_user_sops
+
+    - name: "Verify | TC-SSH-060 | Assert SOPS file present | present_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_060__present_user_sops.stat.exists
+        fail_msg: "TC-SSH-060: id_ed25519_present_user.sops.yaml should exist"
+        quiet: true
+
+    - name: "Verify | TC-SSH-060 | Stat SOPS file | absent_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_060__dir }}/id_ed25519_absent_user.sops.yaml"
+      register: __ssh_keys__tc_060__absent_user_sops
+
+    - name: "Verify | TC-SSH-060 | Assert SOPS file absent | absent_user"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_060__absent_user_sops.stat.exists
+        fail_msg: >-
+          TC-SSH-060: id_ed25519_absent_user.sops.yaml should not exist
+          (per-item absent)
+        quiet: true
+
+    - name: "Verify | TC-SSH-060 | Stat SSH private key | absent_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_060__dir }}/id_ed25519_absent_user"
+      register: __ssh_keys__tc_060__absent_user_privkey
+
+    - name: "Verify | TC-SSH-060 | Assert SSH private key absent | absent_user"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_060__absent_user_privkey.stat.exists
+        fail_msg: >-
+          TC-SSH-060: id_ed25519_absent_user should not exist (per-item absent)
+        quiet: true
+
+    # === TC-SSH-070 | Absent without confirm_absent ===========================
+
+    - name: "Verify | TC-SSH-070 | Stat SOPS file | confirm_user"
+      ansible.builtin.stat:
+        path: >-
+          {{ __ssh_keys__tc_070__dir
+          }}/id_ed25519_confirm_user.sops.yaml
+      register: __ssh_keys__tc_070__ca_no_sops
+
+    - name: "Verify | TC-SSH-070 | Assert SOPS file present | confirm_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_070__ca_no_sops.stat.exists
+        fail_msg: >-
+          TC-SSH-070: id_ed25519_confirm_user.sops.yaml should be
+          preserved when ssh_keys__confirm_absent is false
+        quiet: true
+
+    - name: "Verify | TC-SSH-070 | Stat SSH private key | confirm_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_070__dir }}/id_ed25519_confirm_user"
+      register: __ssh_keys__tc_070__ca_no_privkey
+
+    - name: "Verify | TC-SSH-070 | Assert private key present | confirm_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_070__ca_no_privkey.stat.exists
+        fail_msg: >-
+          TC-SSH-070: id_ed25519_confirm_user should be preserved when
+          ssh_keys__confirm_absent is false
+        quiet: true
+
+    - name: "Verify | TC-SSH-070 | Stat SSH public key | confirm_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_070__dir }}/id_ed25519_confirm_user.pub"
+      register: __ssh_keys__tc_070__ca_no_pubkey
+
+    - name: "Verify | TC-SSH-070 | Assert SSH public key present | confirm_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_070__ca_no_pubkey.stat.exists
+        fail_msg: >-
+          TC-SSH-070: id_ed25519_confirm_user.pub should be preserved when
+          ssh_keys__confirm_absent is false
+        quiet: true
+
+    # === TC-SSH-080 | Absent with confirm_absent=true =========================
+
+    - name: "Verify | TC-SSH-080 | Stat SOPS file | confirm_user"
+      ansible.builtin.stat:
+        path: >-
+          {{ __ssh_keys__tc_080__dir
+          }}/id_ed25519_confirm_user.sops.yaml
+      register: __ssh_keys__tc_080__ca_yes_sops
+
+    - name: "Verify | TC-SSH-080 | Assert SOPS file absent | confirm_user"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_080__ca_yes_sops.stat.exists
+        fail_msg: >-
+          TC-SSH-080: id_ed25519_confirm_user.sops.yaml should be deleted
+          when ssh_keys__confirm_absent is true
+        quiet: true
+
+    - name: "Verify | TC-SSH-080 | Stat SSH private key | confirm_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_080__dir }}/id_ed25519_confirm_user"
+      register: __ssh_keys__tc_080__ca_yes_privkey
+
+    - name: "Verify | TC-SSH-080 | Assert SSH private key absent | confirm_user"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_080__ca_yes_privkey.stat.exists
+        fail_msg: >-
+          TC-SSH-080: id_ed25519_confirm_user should be deleted when
+          ssh_keys__confirm_absent is true
+        quiet: true
+
+    - name: "Verify | TC-SSH-080 | Stat SSH public key | confirm_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_080__dir }}/id_ed25519_confirm_user.pub"
+      register: __ssh_keys__tc_080__ca_yes_pubkey
+
+    - name: "Verify | TC-SSH-080 | Assert SSH public key absent | confirm_user"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_080__ca_yes_pubkey.stat.exists
+        fail_msg: >-
+          TC-SSH-080: id_ed25519_confirm_user.pub should be deleted when
+          ssh_keys__confirm_absent is true
+        quiet: true
+
+    # === TC-SSH-090 | Per-user confirm_absent mixed ===========================
+
+    - name: "Verify | TC-SSH-090 | Stat SOPS file | keep_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_090__dir }}/id_ed25519_keep_user.sops.yaml"
+      register: __ssh_keys__tc_090__keep_user_sops
+
+    - name: "Verify | TC-SSH-090 | Assert SOPS file present | keep_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_090__keep_user_sops.stat.exists
+        fail_msg: >-
+          TC-SSH-090: id_ed25519_keep_user.sops.yaml should be preserved
+          (no per-user confirm_absent)
+        quiet: true
+
+    - name: "Verify | TC-SSH-090 | Stat SSH private key | keep_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_090__dir }}/id_ed25519_keep_user"
+      register: __ssh_keys__tc_090__keep_user_privkey
+
+    - name: "Verify | TC-SSH-090 | Assert SSH private key present | keep_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_090__keep_user_privkey.stat.exists
+        fail_msg: >-
+          TC-SSH-090: id_ed25519_keep_user should be preserved
+          (no per-user confirm_absent)
+        quiet: true
+
+    - name: "Verify | TC-SSH-090 | Stat SSH public key | keep_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_090__dir }}/id_ed25519_keep_user.pub"
+      register: __ssh_keys__tc_090__keep_user_pubkey
+
+    - name: "Verify | TC-SSH-090 | Assert SSH public key present | keep_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_090__keep_user_pubkey.stat.exists
+        fail_msg: >-
+          TC-SSH-090: id_ed25519_keep_user.pub should be preserved
+          (no per-user confirm_absent)
+        quiet: true
+
+    - name: "Verify | TC-SSH-090 | Stat SOPS file | delete_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_090__dir }}/id_ed25519_delete_user.sops.yaml"
+      register: __ssh_keys__tc_090__delete_user_sops
+
+    - name: "Verify | TC-SSH-090 | Assert SOPS file absent | delete_user"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_090__delete_user_sops.stat.exists
+        fail_msg: >-
+          TC-SSH-090: id_ed25519_delete_user.sops.yaml should be deleted
+          (per-user confirm_absent=true)
+        quiet: true
+
+    - name: "Verify | TC-SSH-090 | Stat SSH private key | delete_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_090__dir }}/id_ed25519_delete_user"
+      register: __ssh_keys__tc_090__delete_user_privkey
+
+    - name: "Verify | TC-SSH-090 | Assert SSH private key absent | delete_user"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_090__delete_user_privkey.stat.exists
+        fail_msg: >-
+          TC-SSH-090: id_ed25519_delete_user should be deleted
+          (per-user confirm_absent=true)
+        quiet: true
+
+    - name: "Verify | TC-SSH-090 | Stat SSH public key | delete_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_090__dir }}/id_ed25519_delete_user.pub"
+      register: __ssh_keys__tc_090__delete_user_pubkey
+
+    - name: "Verify | TC-SSH-090 | Assert SSH public key absent | delete_user"
+      ansible.builtin.assert:
+        that:
+          - not __ssh_keys__tc_090__delete_user_pubkey.stat.exists
+        fail_msg: >-
+          TC-SSH-090: id_ed25519_delete_user.pub should be deleted
+          (per-user confirm_absent=true)
+        quiet: true
+
+    # === TC-SSH-100 | Zero overrides ==========================================
+
+    - name: "Verify | TC-SSH-100 | Stat SOPS file | minimal_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_100__dir }}/id_ed25519_minimal_user.sops.yaml"
+      register: __ssh_keys__tc_100__minimal_user_sops
+
+    - name: "Verify | TC-SSH-100 | Assert SOPS file present | minimal_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_100__minimal_user_sops.stat.exists
+        fail_msg: >-
+          TC-SSH-100: id_ed25519_minimal_user.sops.yaml missing
+          (zero-overrides test)
+        quiet: true
+
+    - name: "Verify | TC-SSH-100 | Stat SSH private key | minimal_user"
+      ansible.builtin.stat:
+        path: "{{ __ssh_keys__tc_100__dir }}/id_ed25519_minimal_user"
+      register: __ssh_keys__tc_100__minimal_user_privkey
+
+    - name: "Verify | TC-SSH-100 | Assert private key present | minimal_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_100__minimal_user_privkey.stat.exists
+        fail_msg: >-
+          TC-SSH-100: id_ed25519_minimal_user SSH key missing
+          (zero-overrides test)
+        quiet: true
+
+    - name: "Verify | TC-SSH-100 | Decrypt SOPS file | minimal_user"
+      ansible.builtin.command:
+        cmd: >-
+          sops decrypt
+          {{ __ssh_keys__tc_100__dir }}/id_ed25519_minimal_user.sops.yaml
+      register: __ssh_keys__tc_100__minimal_user_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __ssh_keys__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-SSH-100 | Assert passphrase present | minimal_user"
+      ansible.builtin.assert:
+        that:
+          - >-
+            'ssh_passphrase:' in
+            __ssh_keys__tc_100__minimal_user_decrypted.stdout
+        fail_msg: >-
+          TC-SSH-100: minimal_user SOPS should contain ssh_passphrase
+          (default ssh_keys__passphrase=true)
+        quiet: true
+
+    # === TC-SSH-110 | sops_config_path ========================================
+
+    - name: "Verify | TC-SSH-110 | Stat SOPS file | config_path_user"
+      ansible.builtin.stat:
+        path: >-
+          {{ __ssh_keys__tc_110__dir
+          }}/id_ed25519_config_path_user.sops.yaml
+      register: __ssh_keys__tc_110__config_path_user_sops
+
+    - name: "Verify | TC-SSH-110 | Assert SOPS file present | config_path_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_110__config_path_user_sops.stat.exists
+        fail_msg: >-
+          TC-SSH-110: id_ed25519_config_path_user.sops.yaml missing
+          (sops_config_path test)
+        quiet: true
+
+    - name: "Verify | TC-SSH-110 | Decrypt SOPS file | config_path_user"
+      ansible.builtin.command:
+        cmd: >-
+          sops decrypt
+          {{ __ssh_keys__tc_110__dir
+          }}/id_ed25519_config_path_user.sops.yaml
+      register: __ssh_keys__tc_110__config_path_user_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __ssh_keys__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-SSH-110 | Assert fields present | config_path_user"
+      ansible.builtin.assert:
+        that:
+          - >-
+            'ssh_private_key_path:' in
+            __ssh_keys__tc_110__config_path_user_decrypted.stdout
+        fail_msg: >-
+          TC-SSH-110: config_path_user SOPS should contain ssh_private_key_path
+          (sops_config_path encryption path)
+        quiet: true
+
+    # === TC-SSH-120 | SOPS_AGE_RECIPIENTS env var =============================
+
+    - name: "Verify | TC-SSH-120 | Stat SOPS file | env_var_user"
+      ansible.builtin.stat:
+        path: >-
+          {{ __ssh_keys__tc_120__dir
+          }}/id_ed25519_env_var_user.sops.yaml
+      register: __ssh_keys__tc_120__env_var_user_sops
+
+    - name: "Verify | TC-SSH-120 | Assert SOPS file present | env_var_user"
+      ansible.builtin.assert:
+        that:
+          - __ssh_keys__tc_120__env_var_user_sops.stat.exists
+        fail_msg: >-
+          TC-SSH-120: id_ed25519_env_var_user.sops.yaml missing
+          (SOPS_AGE_RECIPIENTS env var test)
+        quiet: true
+
+    - name: "Verify | TC-SSH-120 | Decrypt SOPS file | env_var_user"
+      ansible.builtin.command:
+        cmd: >-
+          sops decrypt
+          {{ __ssh_keys__tc_120__dir
+          }}/id_ed25519_env_var_user.sops.yaml
+      register: __ssh_keys__tc_120__env_var_user_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __ssh_keys__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-SSH-120 | Assert fields present | env_var_user"
+      ansible.builtin.assert:
+        that:
+          - >-
+            'ssh_private_key_path:' in
+            __ssh_keys__tc_120__env_var_user_decrypted.stdout
+        fail_msg: >-
+          TC-SSH-120: env_var_user SOPS should contain ssh_private_key_path
+          (SOPS_AGE_RECIPIENTS env var encryption path)
+        quiet: true

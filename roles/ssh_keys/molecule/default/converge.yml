@@ -1,0 +1,278 @@
+---
+# devlbo.secrets.ssh_keys - Molecule converge playbook
+#
+# Test ID abbreviation: SSH
+# TC-SSH-010  Full config path mode
+# TC-SSH-020  Content mode (ssh_key_in_sops, no passphrase)
+# TC-SSH-030  Content mode with passphrase
+# TC-SSH-040  Empty users list
+# TC-SSH-050  Global absent state
+# TC-SSH-060  Per-item absent state
+# TC-SSH-070  Absent without confirm_absent (files preserved)
+# TC-SSH-080  Absent with confirm_absent=true (files deleted)
+# TC-SSH-090  Per-user confirm_absent mixed
+# TC-SSH-100  Zero overrides
+
+# ---------------------------------------------------------------------------
+# TC-SSH-010 | Full config path mode
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-SSH-010 | Full config path mode"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_010__dir }}"
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__users:
+      - username: sysadmin
+        passphrase: true
+        ssh_key_name: id_ed25519_sysadmin_prod
+        ssh_key_comment: sysadmin@mycompany.com
+      - username: deploy
+        passphrase: false
+      - username: automation
+        passphrase: false
+        age_public_keys:
+          - "{{ __ssh_keys__tc__age_pub_key }}"
+      - username: webapp
+        passphrase: true
+        metadata:
+          url: "https://webapp.example.com"
+          environment: production
+          notes: "Primary webapp service account"
+      - username: old_user
+        state: absent
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-020 | Content mode (ssh_key_in_sops, no passphrase)
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-SSH-020 | Content mode"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_020__dir }}"
+    ssh_keys__ssh_key_in_sops: true
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__users:
+      - username: content_user
+        passphrase: false
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-030 | Content mode with passphrase
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-SSH-030 | Content mode with passphrase"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_030__dir }}"
+    ssh_keys__ssh_key_in_sops: true
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__users:
+      - username: persist_user
+        passphrase: true
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-040 | Empty users list
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-SSH-040 | Empty users list"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_040__dir }}"
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__users: []
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-050 | Global absent state
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-SSH-050 | Global absent state"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_050__dir }}"
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__state: absent
+    ssh_keys__confirm_absent: true
+    ssh_keys__users:
+      - username: absent_user_a
+      - username: absent_user_b
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-060 | Per-item absent state
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-SSH-060 | Per-item absent state"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_060__dir }}"
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__users:
+      - username: present_user
+        passphrase: false
+      - username: absent_user
+        state: absent
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-070 | Absent without confirm_absent (files preserved)
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-SSH-070 | Absent without confirm_absent"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_070__dir }}"
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__state: absent
+    ssh_keys__confirm_absent: false
+    ssh_keys__users:
+      - username: confirm_user
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-080 | Absent with confirm_absent=true (files deleted)
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-SSH-080 | Absent with confirm_absent=true"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_080__dir }}"
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__state: absent
+    ssh_keys__confirm_absent: true
+    ssh_keys__users:
+      - username: confirm_user
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-090 | Per-user confirm_absent mixed
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-SSH-090 | Per-user confirm_absent mixed"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_090__dir }}"
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__state: absent
+    ssh_keys__confirm_absent: false
+    ssh_keys__users:
+      - username: keep_user
+      - username: delete_user
+        confirm_absent: true
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-100 | Zero overrides
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-SSH-100 | Zero overrides"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_100__dir }}"
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__users:
+      - username: minimal_user
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-110 | Encrypt via sops_config_path
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-SSH-110 | sops_config_path"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_110__dir }}"
+    ssh_keys__sops_config_path: >-
+      {{ __ssh_keys__tc__ephemeral }}/sops-config.yaml
+    ssh_keys__users:
+      - username: config_path_user
+        passphrase: false
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-120 | Encrypt via SOPS_AGE_RECIPIENTS env var
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-SSH-120 | SOPS_AGE_RECIPIENTS env var"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  environment:
+    SOPS_AGE_RECIPIENTS: "{{ __ssh_keys__tc__age_pub_key }}"
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_120__dir }}"
+    ssh_keys__users:
+      - username: env_var_user
+        passphrase: false
+  roles:
+    - role: devlbo.secrets.ssh_keys

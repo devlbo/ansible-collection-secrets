@@ -1,0 +1,24 @@
+---
+# devlbo.secrets.passwords - Converge to absent state (per user)
+#
+# This file is included once per user from main.yml.
+# Entry is gated by main.yml: only runs when the file exists and
+# confirm_absent=true (global or per-user).
+#
+# Per-user filename (__passwords__sops_filename) is a lazy expression in
+# vars/main.yml. It resolves automatically for the current __passwords__item
+# — no set_fact needed.
+
+- name: Absent | Remove SOPS file
+  ansible.builtin.file:
+    path: "{{ __passwords__sops_file_path }}"
+    state: absent
+  tags:
+    - passwords
+
+- name: Absent | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "SOPS file removed: {{ __passwords__sops_file_path }}"
+  tags:
+    - passwords

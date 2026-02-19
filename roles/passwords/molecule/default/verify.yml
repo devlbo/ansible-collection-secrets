@@ -1,0 +1,386 @@
+---
+# devlbo.secrets.passwords - Molecule verify playbook
+#
+# Asserts outcomes (files exist with correct names, SOPS metadata present)
+# not mechanisms (specific task ran).
+
+- name: Verify
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+
+  tasks:
+
+    # === TC-PWD-010 | Per-user attributes =====================================
+
+    - name: "Verify | TC-PWD-010 | Stat SOPS file | sysadmin"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_010__dir }}/sysadmin.sops.yaml"
+      register: __passwords__tc_010__sysadmin_sops
+
+    - name: "Verify | TC-PWD-010 | Assert SOPS file present | sysadmin"
+      ansible.builtin.assert:
+        that:
+          - __passwords__tc_010__sysadmin_sops.stat.exists
+        fail_msg: "TC-PWD-010: sysadmin.sops.yaml missing"
+        quiet: true
+
+    - name: "Verify | TC-PWD-010 | Decrypt SOPS file | sysadmin"
+      ansible.builtin.command:
+        cmd: "sops decrypt {{ __passwords__tc_010__dir }}/sysadmin.sops.yaml"
+      register: __passwords__tc_010__sysadmin_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __passwords__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-PWD-010 | Assert metadata absent | sysadmin"
+      ansible.builtin.assert:
+        that:
+          - "'metadata:' not in __passwords__tc_010__sysadmin_decrypted.stdout"
+        fail_msg: >-
+          TC-PWD-010: sysadmin.sops.yaml should NOT contain metadata when
+          metadata is not provided
+        quiet: true
+
+    - name: "Verify | TC-PWD-010 | Stat custom SOPS filename | root"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_010__dir }}/root_admin.sops.yaml"
+      register: __passwords__tc_010__root_sops
+
+    - name: "Verify | TC-PWD-010 | Assert custom SOPS file present | root"
+      ansible.builtin.assert:
+        that:
+          - __passwords__tc_010__root_sops.stat.exists
+        fail_msg: "TC-PWD-010: root_admin.sops.yaml missing"
+        quiet: true
+
+    - name: "Verify | TC-PWD-010 | Stat default SOPS filename | root"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_010__dir }}/root.sops.yaml"
+      register: __passwords__tc_010__root_default_sops
+
+    - name: "Verify | TC-PWD-010 | Assert default SOPS filename absent | root"
+      ansible.builtin.assert:
+        that:
+          - not __passwords__tc_010__root_default_sops.stat.exists
+        fail_msg: >-
+          TC-PWD-010: root.sops.yaml should not exist when
+          custom filename is set
+        quiet: true
+
+    - name: "Verify | TC-PWD-010 | Stat SOPS file | devops"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_010__dir }}/devops.sops.yaml"
+      register: __passwords__tc_010__devops_sops
+
+    - name: "Verify | TC-PWD-010 | Assert SOPS file present | devops"
+      ansible.builtin.assert:
+        that:
+          - __passwords__tc_010__devops_sops.stat.exists
+        fail_msg: "TC-PWD-010: devops.sops.yaml missing"
+        quiet: true
+
+    - name: "Verify | TC-PWD-010 | Stat SOPS file | webapp"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_010__dir }}/webapp.sops.yaml"
+      register: __passwords__tc_010__webapp_sops
+
+    - name: "Verify | TC-PWD-010 | Assert SOPS file present | webapp"
+      ansible.builtin.assert:
+        that:
+          - __passwords__tc_010__webapp_sops.stat.exists
+        fail_msg: "TC-PWD-010: webapp.sops.yaml missing"
+        quiet: true
+
+    - name: "Verify | TC-PWD-010 | Decrypt SOPS file | webapp"
+      ansible.builtin.command:
+        cmd: "sops decrypt {{ __passwords__tc_010__dir }}/webapp.sops.yaml"
+      register: __passwords__tc_010__webapp_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __passwords__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-PWD-010 | Assert metadata present | webapp"
+      ansible.builtin.assert:
+        that:
+          - "'metadata:' in __passwords__tc_010__webapp_decrypted.stdout"
+          - "'url:' in __passwords__tc_010__webapp_decrypted.stdout"
+          - "'environment:' in __passwords__tc_010__webapp_decrypted.stdout"
+        fail_msg: >-
+          TC-PWD-010: webapp.sops.yaml should contain metadata with url and
+          environment fields
+        quiet: true
+
+    - name: "Verify | TC-PWD-010 | Stat SOPS file | old_user"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_010__dir }}/old_user.sops.yaml"
+      register: __passwords__tc_010__old_user_sops
+
+    - name: "Verify | TC-PWD-010 | Assert SOPS file absent | old_user"
+      ansible.builtin.assert:
+        that:
+          - not __passwords__tc_010__old_user_sops.stat.exists
+        fail_msg: "TC-PWD-010: old_user.sops.yaml should have been removed"
+        quiet: true
+
+    - name: "Verify | TC-PWD-010 | Find leftover plaintext files | cleanup"
+      ansible.builtin.find:
+        paths: "{{ __passwords__tc_010__dir }}"
+        patterns: "*_plaintext.yaml"
+      register: __passwords__tc_010__plaintext_files
+
+    - name: "Verify | TC-PWD-010 | Assert no plaintext files remain | cleanup"
+      ansible.builtin.assert:
+        that:
+          - __passwords__tc_010__plaintext_files.files | length == 0
+        fail_msg: >-
+          TC-PWD-010: Found leftover plaintext files:
+          {{
+            __passwords__tc_010__plaintext_files.files
+            | map(attribute='path')
+            | list
+          }}
+        quiet: true
+
+    # === TC-PWD-020 | Empty users list ========================================
+
+    - name: "Verify | TC-PWD-020 | Stat output dir | empty users"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_020__dir }}"
+      register: __passwords__tc_020__output_dir
+
+    - name: "Verify | TC-PWD-020 | Assert output dir absent | empty users"
+      ansible.builtin.assert:
+        that:
+          - not __passwords__tc_020__output_dir.stat.exists
+        fail_msg: >-
+          TC-PWD-020: Output directory should not be created when
+          passwords__users is empty
+        quiet: true
+
+    # === TC-PWD-030 | Global absent state =====================================
+
+    - name: "Verify | TC-PWD-030 | Stat SOPS file | absent_user_a"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_030__dir }}/absent_user_a.sops.yaml"
+      register: __passwords__tc_030__absent_user_a_sops
+
+    - name: "Verify | TC-PWD-030 | Assert SOPS file absent | absent_user_a"
+      ansible.builtin.assert:
+        that:
+          - not __passwords__tc_030__absent_user_a_sops.stat.exists
+        fail_msg: >-
+          TC-PWD-030: absent_user_a.sops.yaml should be deleted (global absent)
+        quiet: true
+
+    - name: "Verify | TC-PWD-030 | Stat SOPS file | absent_user_b"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_030__dir }}/absent_user_b.sops.yaml"
+      register: __passwords__tc_030__absent_user_b_sops
+
+    - name: "Verify | TC-PWD-030 | Assert SOPS file absent | absent_user_b"
+      ansible.builtin.assert:
+        that:
+          - not __passwords__tc_030__absent_user_b_sops.stat.exists
+        fail_msg: >-
+          TC-PWD-030: absent_user_b.sops.yaml should be deleted (global absent)
+        quiet: true
+
+    # === TC-PWD-040 | Per-item absent state ===================================
+
+    - name: "Verify | TC-PWD-040 | Stat SOPS file | present_user"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_040__dir }}/present_user.sops.yaml"
+      register: __passwords__tc_040__present_user_sops
+
+    - name: "Verify | TC-PWD-040 | Assert SOPS file present | present_user"
+      ansible.builtin.assert:
+        that:
+          - __passwords__tc_040__present_user_sops.stat.exists
+        fail_msg: "TC-PWD-040: present_user.sops.yaml should exist"
+        quiet: true
+
+    - name: "Verify | TC-PWD-040 | Stat SOPS file | absent_user"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_040__dir }}/absent_user.sops.yaml"
+      register: __passwords__tc_040__absent_user_sops
+
+    - name: "Verify | TC-PWD-040 | Assert SOPS file absent | absent_user"
+      ansible.builtin.assert:
+        that:
+          - not __passwords__tc_040__absent_user_sops.stat.exists
+        fail_msg: >-
+          TC-PWD-040: absent_user.sops.yaml should not exist (per-item absent)
+        quiet: true
+
+    # === TC-PWD-050 | Absent without confirm_absent ===========================
+
+    - name: "Verify | TC-PWD-050 | Stat SOPS file | confirm_user"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_050__dir }}/confirm_user.sops.yaml"
+      register: __passwords__tc_050__confirm_user_sops
+
+    - name: "Verify | TC-PWD-050 | Assert SOPS file present | confirm_user"
+      ansible.builtin.assert:
+        that:
+          - __passwords__tc_050__confirm_user_sops.stat.exists
+        fail_msg: >-
+          TC-PWD-050: confirm_user.sops.yaml should be preserved when
+          passwords__confirm_absent is false
+        quiet: true
+
+    # === TC-PWD-060 | Absent with confirm_absent=true =========================
+
+    - name: "Verify | TC-PWD-060 | Stat SOPS file | confirm_user"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_060__dir }}/confirm_user.sops.yaml"
+      register: __passwords__tc_060__confirm_user_sops
+
+    - name: "Verify | TC-PWD-060 | Assert SOPS file absent | confirm_user"
+      ansible.builtin.assert:
+        that:
+          - not __passwords__tc_060__confirm_user_sops.stat.exists
+        fail_msg: >-
+          TC-PWD-060: confirm_user.sops.yaml should be deleted when
+          passwords__confirm_absent is true
+        quiet: true
+
+    # === TC-PWD-070 | Per-user confirm_absent mixed ===========================
+
+    - name: "Verify | TC-PWD-070 | Stat SOPS file | keep_user"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_070__dir }}/keep_user.sops.yaml"
+      register: __passwords__tc_070__keep_user_sops
+
+    - name: "Verify | TC-PWD-070 | Assert SOPS file present | keep_user"
+      ansible.builtin.assert:
+        that:
+          - __passwords__tc_070__keep_user_sops.stat.exists
+        fail_msg: >-
+          TC-PWD-070: keep_user.sops.yaml should be preserved
+          (no per-user confirm_absent)
+        quiet: true
+
+    - name: "Verify | TC-PWD-070 | Stat SOPS file | delete_user"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_070__dir }}/delete_user.sops.yaml"
+      register: __passwords__tc_070__delete_user_sops
+
+    - name: "Verify | TC-PWD-070 | Assert SOPS file absent | delete_user"
+      ansible.builtin.assert:
+        that:
+          - not __passwords__tc_070__delete_user_sops.stat.exists
+        fail_msg: >-
+          TC-PWD-070: delete_user.sops.yaml should be deleted
+          (per-user confirm_absent=true)
+        quiet: true
+
+    # === TC-PWD-080 | Zero overrides ==========================================
+
+    - name: "Verify | TC-PWD-080 | Stat SOPS file | minimal_user"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_080__dir }}/minimal_user.sops.yaml"
+      register: __passwords__tc_080__minimal_user_sops
+
+    - name: "Verify | TC-PWD-080 | Assert SOPS file present | minimal_user"
+      ansible.builtin.assert:
+        that:
+          - __passwords__tc_080__minimal_user_sops.stat.exists
+        fail_msg: >-
+          TC-PWD-080: minimal_user.sops.yaml missing (zero-overrides test)
+        quiet: true
+
+    - name: "Verify | TC-PWD-080 | Decrypt SOPS file | minimal_user"
+      ansible.builtin.command:
+        cmd: >-
+          sops decrypt
+          {{ __passwords__tc_080__dir }}/minimal_user.sops.yaml
+      register: __passwords__tc_080__minimal_user_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __passwords__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-PWD-080 | Assert password field present | minimal_user"
+      ansible.builtin.assert:
+        that:
+          - >-
+            'password:' in
+            __passwords__tc_080__minimal_user_decrypted.stdout
+        fail_msg: >-
+          TC-PWD-080: minimal_user.sops.yaml should contain a password field
+          (security defaults must work with zero overrides)
+        quiet: true
+
+    # === TC-PWD-090 | sops_config_path =======================================
+
+    - name: "Verify | TC-PWD-090 | Stat SOPS file | config_path_user"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_090__dir }}/config_path_user.sops.yaml"
+      register: __passwords__tc_090__config_path_user_sops
+
+    - name: "Verify | TC-PWD-090 | Assert SOPS file present | config_path_user"
+      ansible.builtin.assert:
+        that:
+          - __passwords__tc_090__config_path_user_sops.stat.exists
+        fail_msg: >-
+          TC-PWD-090: config_path_user.sops.yaml missing
+          (sops_config_path test)
+        quiet: true
+
+    - name: "Verify | TC-PWD-090 | Decrypt SOPS file | config_path_user"
+      ansible.builtin.command:
+        cmd: >-
+          sops decrypt
+          {{ __passwords__tc_090__dir }}/config_path_user.sops.yaml
+      register: __passwords__tc_090__config_path_user_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __passwords__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-PWD-090 | Assert password field present | config_path"
+      ansible.builtin.assert:
+        that:
+          - >-
+            'password:' in
+            __passwords__tc_090__config_path_user_decrypted.stdout
+        fail_msg: >-
+          TC-PWD-090: config_path_user.sops.yaml should contain a password
+          field (sops_config_path encryption path)
+        quiet: true
+
+    # === TC-PWD-100 | SOPS_AGE_RECIPIENTS env var =============================
+
+    - name: "Verify | TC-PWD-100 | Stat SOPS file | env_var_user"
+      ansible.builtin.stat:
+        path: "{{ __passwords__tc_100__dir }}/env_var_user.sops.yaml"
+      register: __passwords__tc_100__env_var_user_sops
+
+    - name: "Verify | TC-PWD-100 | Assert SOPS file present | env_var_user"
+      ansible.builtin.assert:
+        that:
+          - __passwords__tc_100__env_var_user_sops.stat.exists
+        fail_msg: >-
+          TC-PWD-100: env_var_user.sops.yaml missing
+          (SOPS_AGE_RECIPIENTS env var test)
+        quiet: true
+
+    - name: "Verify | TC-PWD-100 | Decrypt SOPS file | env_var_user"
+      ansible.builtin.command:
+        cmd: >-
+          sops decrypt
+          {{ __passwords__tc_100__dir }}/env_var_user.sops.yaml
+      register: __passwords__tc_100__env_var_user_decrypted
+      changed_when: false
+      environment:
+        SOPS_AGE_KEY_FILE: "{{ __passwords__tc__ephemeral }}/age-key.txt"
+
+    - name: "Verify | TC-PWD-100 | Assert password field present | env_var_user"
+      ansible.builtin.assert:
+        that:
+          - "'password:' in __passwords__tc_100__env_var_user_decrypted.stdout"
+        fail_msg: >-
+          TC-PWD-100: env_var_user.sops.yaml should contain a password field
+          (SOPS_AGE_RECIPIENTS env var encryption path)
+        quiet: true

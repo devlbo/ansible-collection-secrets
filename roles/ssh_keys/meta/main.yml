@@ -1,0 +1,35 @@
+---
+galaxy_info:
+  author: Laurent Bodin
+  description: >-
+    Provision SSH keypairs with optional passphrase protection, with
+    metadata persisted into SOPS-encrypted YAML files using age keys.
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+    - name: EL
+      versions:
+        - "8"
+        - "9"
+    - name: AlmaLinux
+      versions:
+        - "8"
+        - "9"
+    - name: OracleLinux
+      versions:
+        - "8.10"
+        - "9.4"
+
+  galaxy_tags:
+    - secrets
+    - sops
+    - age
+    - ssh
+    - security
+
+# No role dependencies. Composition is the playbook's responsibility.
+dependencies: []

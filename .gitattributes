@@ -1,0 +1,306 @@
+# .gitattributes - Git Attributes Configuration
+# This file defines attributes for pathnames to control Git behavior
+# Documentation: https://git-scm.com/docs/gitattributes
+
+# ============================================================================
+# Auto-detect text files and normalize line endings to LF on checkin
+# ============================================================================
+# This is the recommended baseline - Git will handle text files automatically
+* text=auto
+
+# ============================================================================
+# Explicitly declare text files you want to always be normalized and converted
+# to native line endings on checkout (LF on Unix, CRLF on Windows)
+# ============================================================================
+
+# Source code
+*.py text eol=lf
+*.pyi text eol=lf
+*.pyx text eol=lf
+*.pxd text eol=lf
+
+# Shell scripts (always LF)
+*.sh text eol=lf
+*.bash text eol=lf
+*.fish text eol=lf
+*.zsh text eol=lf
+
+# Windows scripts (always CRLF)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Configuration files
+*.cfg text eol=lf
+*.conf text eol=lf
+*.config text eol=lf
+*.ini text eol=lf
+*.toml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.xml text eol=lf
+*.json5 text eol=lf
+
+# Documentation
+*.md text eol=lf
+*.rst text eol=lf
+*.txt text eol=lf
+*.adoc text eol=lf
+LICENSE text eol=lf
+AUTHORS text eol=lf
+CHANGELOG text eol=lf
+CONTRIBUTING text eol=lf
+README text eol=lf
+
+# Templates
+*.tmpl text eol=lf
+*.mustache text eol=lf
+*.jinja text eol=lf
+*.jinja2 text eol=lf
+
+# Git configuration
+.gitattributes text eol=lf
+.gitignore text eol=lf
+.gitkeep text eol=lf
+.gitmodules text eol=lf
+
+# CI/CD
+.gitlab-ci.yml text eol=lf
+.travis.yml text eol=lf
+appveyor.yml text eol=lf
+Jenkinsfile text eol=lf
+
+# Editor configuration
+.editorconfig text eol=lf
+
+# Python specific
+requirements*.txt text eol=lf
+requirements*.in text eol=lf
+constraints*.txt text eol=lf
+MANIFEST.in text eol=lf
+setup.py text eol=lf
+setup.cfg text eol=lf
+pyproject.toml text eol=lf
+Pipfile text eol=lf
+Pipfile.lock text eol=lf
+poetry.lock text eol=lf
+uv.lock text eol=lf
+tox.ini text eol=lf
+pytest.ini text eol=lf
+.coveragerc text eol=lf
+mypy.ini text eol=lf
+.bandit text eol=lf
+ruff.toml text eol=lf
+.pre-commit-config.yaml text eol=lf
+
+# Docker
+Dockerfile text eol=lf
+Dockerfile.* text eol=lf
+*.dockerfile text eol=lf
+docker-compose*.yml text eol=lf
+.dockerignore text eol=lf
+
+# Makefiles (must use LF)
+Makefile text eol=lf
+makefile text eol=lf
+*.mk text eol=lf
+*.make text eol=lf
+
+# ============================================================================
+# Declare files that will always have LF line endings on checkout
+# ============================================================================
+# These are typically Unix-specific files that must have LF
+
+*.css text eol=lf
+*.html text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.svg text eol=lf
+
+# ============================================================================
+# Binary files - explicitly declare to prevent line ending conversion
+# ============================================================================
+# Git auto-detects binaries, but explicit declaration is safer
+
+# Archives
+*.7z binary
+*.gz binary
+*.jar binary
+*.rar binary
+*.tar binary
+*.zip binary
+*.bz2 binary
+*.xz binary
+*.tgz binary
+
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.bmp binary
+*.tiff binary
+*.webp binary
+*.svg binary
+*.psd binary
+*.ai binary
+
+# Fonts
+*.ttf binary
+*.otf binary
+*.eot binary
+*.woff binary
+*.woff2 binary
+
+# Documents
+*.pdf binary
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.ppt binary
+*.pptx binary
+
+# Audio/Video
+*.mp3 binary
+*.mp4 binary
+*.wav binary
+*.flac binary
+*.ogg binary
+*.avi binary
+*.mov binary
+*.webm binary
+
+# Executables
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.pyc binary
+*.pyo binary
+*.pyd binary
+
+# Python wheels and eggs
+*.whl binary
+*.egg binary
+
+# Databases
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+
+# Other binary formats
+*.pickle binary
+*.pkl binary
+*.npy binary
+*.npz binary
+
+# ============================================================================
+# Python-specific diff configurations
+# ============================================================================
+# Better diff output for Python files
+
+*.py diff=python
+*.pyw diff=python
+*.pyx diff=python
+
+# ============================================================================
+# GitHub Linguist Configuration
+# ============================================================================
+# Control language detection and statistics on GitHub
+# Documentation: https://github.com/github-linguist/linguist/blob/main/docs/overrides.md
+
+# Mark test files and fixtures as test code
+tests/** linguist-detectable=false
+**/tests/** linguist-detectable=false
+**/*_test.py linguist-detectable=false
+**/test_*.py linguist-detectable=false
+**/conftest.py linguist-detectable=false
+
+# Mark generated files
+*.py[cod] linguist-generated=true
+
+# Exclude vendored/third-party code from statistics
+**/vendor/** linguist-vendored=true
+**/node_modules/** linguist-vendored=true
+**/.venv/** linguist-vendored=true
+**/venv/** linguist-vendored=true
+
+# Mark documentation
+*.md linguist-documentation
+*.rst linguist-documentation
+docs/** linguist-documentation=true
+
+# Mark configuration files as detectable to show in language stats
+*.toml linguist-detectable=true
+*.yaml linguist-detectable=true
+*.yml linguist-detectable=true
+
+# ============================================================================
+# Merge strategies
+# ============================================================================
+# Prevent merge conflicts in generated files by keeping ours
+
+# Lock files - prefer to regenerate rather than merge
+*.lock merge=binary
+uv.lock merge=binary
+poetry.lock merge=binary
+Pipfile.lock merge=binary
+package-lock.json merge=binary
+yarn.lock merge=binary
+
+# ============================================================================
+# Export-ignore - files/folders to exclude from export archives
+# ============================================================================
+# These files are not needed in distribution archives (git archive)
+
+.github/ export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
+.editorconfig export-ignore
+.pre-commit-config.yaml export-ignore
+
+# Test and development files
+tests/ export-ignore
+docs/ export-ignore
+*.md export-ignore
+tox.ini export-ignore
+pytest.ini export-ignore
+.coveragerc export-ignore
+mypy.ini export-ignore
+ruff.toml export-ignore
+
+# CI/CD files
+.gitlab-ci.yml export-ignore
+.travis.yml export-ignore
+Jenkinsfile export-ignore
+
+# Development tools
+Makefile export-ignore
+*.mk export-ignore
+
+# ============================================================================
+# Notes about this configuration
+# ============================================================================
+# After modifying this file, you should run:
+#   git add --renormalize .
+#
+# This will renormalize all tracked files according to the new rules.
+#
+# Best practices followed:
+# 1. Use 'text=auto' as the default for automatic detection
+# 2. Explicitly set line endings for platform-specific scripts
+# 3. Mark binary files to prevent corruption
+# 4. Configure GitHub Linguist for accurate language statistics
+# 5. Use appropriate diff strategies for better code review
+# 6. Exclude development files from distribution archives
+#
+# References:
+# - https://git-scm.com/docs/gitattributes
+# - https://rehansaeed.com/gitattributes-best-practices/
+# - https://github.com/github-linguist/linguist/blob/main/docs/overrides.md
+# - https://docs.github.com/en/get-started/getting-started-with-git/configuring-git-to-handle-line-endings

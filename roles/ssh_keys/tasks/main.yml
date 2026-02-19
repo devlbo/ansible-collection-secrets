@@ -1,0 +1,67 @@
+---
+# devlbo.secrets.ssh_keys - Main entry point
+#
+# Flow: validate → prepare → loop present → loop absent → noop
+
+- name: Validate role inputs
+  ansible.builtin.include_tasks: validate.yml
+  when:
+    - ssh_keys__users is defined
+    - not ssh_keys__users | length == 0
+  tags:
+    - ssh_keys
+
+- name: Prepare
+  ansible.builtin.include_tasks: prepare.yml
+  when:
+    - ssh_keys__users is defined
+    - not ssh_keys__users | length == 0
+  tags:
+    - ssh_keys
+
+- name: Converge to present state
+  ansible.builtin.include_tasks: present.yml
+  loop: "{{ ssh_keys__users }}"
+  loop_control:
+    loop_var: __ssh_keys__item
+    label: "{{ __ssh_keys__item.username }}"
+  when:
+    - ssh_keys__users is defined
+    - not ssh_keys__users | length == 0
+    - ssh_keys__state == 'present'
+    - (__ssh_keys__item.state | default('present')) == 'present'
+    - >-
+      (not __ssh_keys__sops_exists[__ssh_keys__item.username]
+       and not __ssh_keys__priv_exists[__ssh_keys__item.username])
+      or (ssh_keys__overwrite | bool)
+  tags:
+    - ssh_keys
+
+- name: Converge to absent state
+  ansible.builtin.include_tasks: absent.yml
+  loop: "{{ ssh_keys__users }}"
+  loop_control:
+    loop_var: __ssh_keys__item
+    label: "{{ __ssh_keys__item.username }}"
+  when:
+    - ssh_keys__users is defined
+    - not ssh_keys__users | length == 0
+    - >-
+      ssh_keys__state == 'absent'
+      or (__ssh_keys__item.state | default('present')) == 'absent'
+    - >-
+      __ssh_keys__sops_exists[__ssh_keys__item.username]
+      or __ssh_keys__priv_exists[__ssh_keys__item.username]
+      or __ssh_keys__pub_exists[__ssh_keys__item.username]
+    - >-
+      (__ssh_keys__item.confirm_absent
+       | default(ssh_keys__confirm_absent)) | bool
+  tags:
+    - ssh_keys
+
+- name: Do nothing (skip, no-op)
+  ansible.builtin.debug:
+    msg: "ssh_keys__users is empty. Nothing to do."
+  when: ssh_keys__users | length == 0
+  tags:
+    - ssh_keys

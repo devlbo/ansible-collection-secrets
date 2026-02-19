@@ -1,0 +1,231 @@
+---
+# devlbo.secrets.passwords - Input validation
+#
+# All precondition checks run here before any changes are made.
+# Fail early with clear messages including variable name, constraint,
+# and actual value.
+#
+# Type checking and valid-value enforcement (state choices, list types,
+# enum choices) are handled by meta/argument_specs.yml, which Ansible
+# validates before the role runs. This file covers business logic only:
+# tool prerequisites, null/empty guards, cross-field constraints, and
+# security floors.
+
+# ---------------------------------------------------------------------------
+# Tool prerequisites
+# ---------------------------------------------------------------------------
+
+- name: Validate | Verify sops binary is available
+  ansible.builtin.command:
+    cmd: which sops
+  register: __passwords__sops_check
+  changed_when: false
+  failed_when: false
+  check_mode: false  # binary presence check must run even in --check mode
+  tags:
+    - passwords
+
+- name: Validate | Assert sops is installed
+  ansible.builtin.assert:
+    that:
+      - __passwords__sops_check.rc == 0
+    fail_msg: >-
+      sops binary not found on the control node. Install sops before running
+      this role. See https://github.com/getsops/sops
+    quiet: true
+  tags:
+    - passwords
+
+- name: Validate | Verify age binary is available
+  ansible.builtin.command:
+    cmd: which age
+  register: __passwords__age_check
+  changed_when: false
+  failed_when: false
+  check_mode: false  # binary presence check must run even in --check mode
+  tags:
+    - passwords
+
+- name: Validate | Assert age is installed
+  ansible.builtin.assert:
+    that:
+      - __passwords__age_check.rc == 0
+    fail_msg: >-
+      age binary not found on the control node. Install age before running
+      this role. See https://github.com/FiloSottile/age
+    quiet: true
+  tags:
+    - passwords
+
+# ---------------------------------------------------------------------------
+# User validation
+# ---------------------------------------------------------------------------
+
+- name: Validate | Assert each user entry has a username
+  ansible.builtin.assert:
+    that:
+      - __passwords__item.username is defined
+      - __passwords__item.username | length > 0
+    fail_msg: >-
+      Every entry in passwords__users must have a non-empty 'username'
+      attribute. Entry at index {{ idx }} is missing or empty.
+    quiet: true
+  loop: "{{ passwords__users }}"
+  loop_control:
+    loop_var: __passwords__item
+    index_var: idx
+    label: "{{ __passwords__item.username | default('UNDEFINED') }}"
+  tags:
+    - passwords
+
+- name: Validate | Assert no duplicate usernames
+  ansible.builtin.assert:
+    that:
+      - >-
+        passwords__users | map(attribute='username') | list
+        == passwords__users | map(attribute='username') | unique | list
+    fail_msg: >-
+      passwords__users contains duplicate username values.
+      Each username must be unique.
+    quiet: true
+  tags:
+    - passwords
+
+# ---------------------------------------------------------------------------
+# Password policy validation
+# ---------------------------------------------------------------------------
+
+- name: Validate | Assert password length meets minimum
+  ansible.builtin.assert:
+    that:
+      - passwords__password_length | int >= __passwords__min_password_length
+    fail_msg: >-
+      passwords__password_length must be >=
+      {{ __passwords__min_password_length }},
+      got {{ passwords__password_length }}.
+    quiet: true
+  tags:
+    - passwords
+
+- name: Validate | Assert password min_* sum does not exceed length
+  ansible.builtin.assert:
+    that:
+      - >-
+        (passwords__password_min_lower | int
+         + passwords__password_min_upper | int
+         + passwords__password_min_numeric | int
+         + passwords__password_min_special | int)
+        <= (passwords__password_length | int)
+    fail_msg: >-
+      Sum of password min_* constraints
+      ({{ passwords__password_min_lower }}
+      + {{ passwords__password_min_upper }}
+      + {{ passwords__password_min_numeric }}
+      + {{ passwords__password_min_special }}
+      = {{ passwords__password_min_lower | int
+           + passwords__password_min_upper | int
+           + passwords__password_min_numeric | int
+           + passwords__password_min_special | int }})
+      exceeds passwords__password_length ({{ passwords__password_length }}).
+    quiet: true
+  tags:
+    - passwords
+
+- name: Validate | Assert password special_chars is not empty
+  ansible.builtin.assert:
+    that:
+      - passwords__password_special_chars | length > 0
+    fail_msg: >-
+      passwords__password_special_chars must not be empty when
+      passwords__password_min_special > 0.
+    quiet: true
+  when:
+    - passwords__password_min_special | int > 0
+  tags:
+    - passwords
+
+# ---------------------------------------------------------------------------
+# Output configuration validation
+# ---------------------------------------------------------------------------
+
+- name: Validate | Assert output directory is not empty
+  ansible.builtin.assert:
+    that:
+      - passwords__output_dir | length > 0
+    fail_msg: >-
+      passwords__output_dir must not be empty.
+      Provide a valid directory path for SOPS-encrypted output files.
+    quiet: true
+  tags:
+    - passwords
+
+# ---------------------------------------------------------------------------
+# SOPS config path validation
+# ---------------------------------------------------------------------------
+
+- name: Validate | Assert global sops_config_path exists when set
+  ansible.builtin.stat:
+    path: "{{ passwords__sops_config_path }}"
+  register: __passwords__sops_config_stat
+  when: passwords__sops_config_path | length > 0
+  tags:
+    - passwords
+
+- name: Validate | Assert global sops_config_path is a file
+  ansible.builtin.assert:
+    that:
+      - __passwords__sops_config_stat.stat.exists
+      - __passwords__sops_config_stat.stat.isreg
+    fail_msg: >-
+      passwords__sops_config_path '{{ passwords__sops_config_path }}' does not
+      exist or is not a regular file. Provide a valid path to a .sops.yaml
+      config file.
+    quiet: true
+  when: passwords__sops_config_path | length > 0
+  tags:
+    - passwords
+
+# ---------------------------------------------------------------------------
+# Age public key format validation
+# ---------------------------------------------------------------------------
+
+- name: Validate | Assert global age public keys have age1 prefix
+  ansible.builtin.assert:
+    that:
+      - __passwords__key is match('^age1[a-z0-9]+$')
+    fail_msg: >-
+      Invalid age public key '{{ __passwords__key }}' in
+      passwords__age_public_keys. age public keys must start with 'age1'
+      and contain only lowercase alphanumeric characters.
+    quiet: true
+  loop: "{{ passwords__age_public_keys }}"
+  loop_control:
+    loop_var: __passwords__key
+    label: "{{ __passwords__key }}"
+  when: passwords__age_public_keys | length > 0
+  tags:
+    - passwords
+
+- name: Validate | Assert per-user age public keys have age1 prefix
+  ansible.builtin.assert:
+    that:
+      - >-
+        __passwords__item.age_public_keys
+        | select('match', '^age1[a-z0-9]+$')
+        | list
+        | length
+        == __passwords__item.age_public_keys | length
+    fail_msg: >-
+      One or more age public keys defined for {{ __passwords__item.username }}
+      are invalid. Each key must start with 'age1' and contain only lowercase
+      alphanumeric characters. Got: {{ __passwords__item.age_public_keys }}.
+    quiet: true
+  loop: "{{ passwords__users }}"
+  loop_control:
+    loop_var: __passwords__item
+    label: "{{ __passwords__item.username | default('UNDEFINED') }}"
+  when:
+    - __passwords__item.age_public_keys is defined
+    - __passwords__item.age_public_keys | length > 0
+  tags:
+    - passwords

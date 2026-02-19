@@ -1,0 +1,103 @@
+---
+# devlbo.secrets.passwords - Default variables (public API)
+#
+# All public variables use the 'passwords__' prefix (double underscore).
+# Override these in group_vars, host_vars, or playbook vars.
+#
+# This role generates and persists encrypted user passwords and password
+# hashes into per-user SOPS-encrypted YAML files using age keys.
+
+# ---------------------------------------------------------------------------
+# Global state toggle
+# ---------------------------------------------------------------------------
+# Set to 'absent' to remove SOPS password files for all users. Requires
+# passwords__confirm_absent=true for files to actually be deleted.
+# Individual user 'state' overrides this when passwords__state is 'present'.
+passwords__state: present
+
+# ---------------------------------------------------------------------------
+# User definitions
+# ---------------------------------------------------------------------------
+# List of users for which passwords should be generated.
+# Each item supports the following attributes:
+#
+#   username:        (required) Username. Used in default filenames.
+#   state:           (optional) 'present' or 'absent'. Default: present.
+#   sops_filename:   (optional) Override SOPS output filename.
+#                               Default: <username>.sops.yaml
+#   age_public_keys: (optional) Override global passwords__age_public_keys
+#                               for this user. Default: global list.
+#   metadata:        (optional) Free-form dict included in SOPS output.
+#                               Omitted when empty. Default: {}.
+#
+# Every user in the list with state=present gets a password generated.
+# There is no per-user generate_password flag — omit or set state=absent
+# to skip a user.
+#
+# An empty list is a valid no-op.
+passwords__users: []
+
+# ---------------------------------------------------------------------------
+# Password policy
+# ---------------------------------------------------------------------------
+
+# Total length of the generated user password.
+passwords__password_length: 64
+
+# Minimum number of lowercase letters in the password.
+passwords__password_min_lower: 8
+
+# Minimum number of uppercase letters in the password.
+passwords__password_min_upper: 8
+
+# Minimum number of numeric characters in the password.
+passwords__password_min_numeric: 8
+
+# Minimum number of special characters in the password.
+passwords__password_min_special: 8
+
+# Special characters allowed in passwords. Used as override_special
+# in the random_string lookup.
+passwords__password_special_chars: "!@#$%^&*()_+-=[]{};:,.<>?"
+
+# Hash algorithm for the password hash. Choices: sha512, sha256, bcrypt.
+passwords__password_hash_algorithm: sha512
+
+# ---------------------------------------------------------------------------
+# SOPS / age encryption
+# ---------------------------------------------------------------------------
+
+# Directory where SOPS-encrypted password files are written.
+passwords__output_dir: "~/.secrets"
+
+# List of age public keys for SOPS encryption.
+# When empty, SOPS falls back to sops_config_path, SOPS_AGE_RECIPIENTS env var,
+# or automatic .sops.yaml configuration file discovery (in that order).
+passwords__age_public_keys: []
+
+# Path to a .sops.yaml config file for SOPS encryption.
+# When non-empty and passwords__age_public_keys is empty, SOPS uses this config
+# file instead of automatic .sops.yaml discovery. Ignored when age_public_keys
+# is set. When empty, falls back to SOPS_AGE_RECIPIENTS env var or .sops.yaml
+# discovery.
+passwords__sops_config_path: ""
+
+# ---------------------------------------------------------------------------
+# Overwrite behavior
+# ---------------------------------------------------------------------------
+# Defaults to false (skip existing). A warning message is displayed when
+# an existing SOPS file is skipped.
+
+# When true, regenerate passwords and overwrite existing SOPS files.
+passwords__overwrite: false
+
+# ---------------------------------------------------------------------------
+# Absent state safety gate
+# ---------------------------------------------------------------------------
+# Defaults to false. When false, absent state shows a warning listing
+# files that would be deleted and skips deletion. Set to true only after
+# reviewing the dry-run output.
+# Per-user confirm_absent attribute overrides this global setting.
+
+# When true, allow deletion of existing SOPS files for absent users.
+passwords__confirm_absent: false

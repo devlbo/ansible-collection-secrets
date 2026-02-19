@@ -1,0 +1,125 @@
+---
+# devlbo.secrets.passwords - Molecule prepare playbook
+#
+# Runs ONCE before converge. Creates prerequisite SOPS files for absent-state
+# tests. Not re-run during idempotency checks, which is why setup plays for
+# absent-state tests live here rather than in converge.yml.
+#
+# Test ID abbreviation: PWD
+
+# ---------------------------------------------------------------------------
+# Generate a fresh age key pair scoped to this Molecule run
+# ---------------------------------------------------------------------------
+# Writes two files into the ephemeral directory:
+#   age-key.txt     — full key file (private + public), used by SOPS decrypt
+#   age-pub-key.txt — public key only, read by vars/main.yml at play time
+#
+# All converge/verify plays pick up the public key via vars/main.yml.
+# All verify decrypt tasks set SOPS_AGE_KEY_FILE=.../age-key.txt in their
+# environment so SOPS can find the private key at verification time.
+
+- name: "Prepare | Generate age key pair for this Molecule run"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: "Prepare | Generate age key pair"
+      ansible.builtin.command:
+        cmd: "age-keygen -o {{ __passwords__tc__ephemeral }}/age-key.txt"
+      changed_when: true
+
+    - name: "Prepare | Extract age public key"
+      ansible.builtin.shell:
+        cmd: >-
+          age-keygen -y {{ __passwords__tc__ephemeral }}/age-key.txt
+          > {{ __passwords__tc__ephemeral }}/age-pub-key.txt
+      changed_when: true
+
+    - name: "Prepare | Write sops-config.yaml for sops_config_path tests"
+      ansible.builtin.copy:
+        dest: "{{ __passwords__tc__ephemeral }}/sops-config.yaml"
+        content: |
+          ---
+          creation_rules:
+            - age: {{ __passwords__tc__age_pub_key | trim }}
+        mode: "0600"
+
+# ---------------------------------------------------------------------------
+# TC-PWD-030 | Create users that the absent test will delete
+# ---------------------------------------------------------------------------
+
+- name: "Prepare | TC-PWD-030 | Create required users for the test"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_030__dir }}"
+        passwords__age_public_keys:
+          - "{{ __passwords__tc__age_pub_key }}"
+        passwords__users:
+          - username: absent_user_a
+          - username: absent_user_b
+
+# ---------------------------------------------------------------------------
+# TC-PWD-050 | Create user that the absent-without-confirm test uses
+# ---------------------------------------------------------------------------
+
+- name: "Prepare | TC-PWD-050 | Create required users for the test"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_050__dir }}"
+        passwords__age_public_keys:
+          - "{{ __passwords__tc__age_pub_key }}"
+        passwords__users:
+          - username: confirm_user
+
+# ---------------------------------------------------------------------------
+# TC-PWD-060 | Create user that the absent-with-confirm test deletes
+# ---------------------------------------------------------------------------
+
+- name: "Prepare | TC-PWD-060 | Create required users for the test"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_060__dir }}"
+        passwords__age_public_keys:
+          - "{{ __passwords__tc__age_pub_key }}"
+        passwords__users:
+          - username: confirm_user
+
+# ---------------------------------------------------------------------------
+# TC-PWD-070 | Create users for the per-user confirm_absent test
+# ---------------------------------------------------------------------------
+
+- name: "Prepare | TC-PWD-070 | Create required users for the test"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_070__dir }}"
+        passwords__age_public_keys:
+          - "{{ __passwords__tc__age_pub_key }}"
+        passwords__users:
+          - username: keep_user
+          - username: delete_user

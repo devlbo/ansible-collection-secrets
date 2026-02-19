@@ -1,0 +1,230 @@
+---
+# devlbo.secrets.passwords - Molecule converge playbook
+#
+# Test ID abbreviation: PWD
+# TC-PWD-010  Per-user attributes (full config)
+# TC-PWD-020  Empty users list
+# TC-PWD-030  Global absent state
+# TC-PWD-040  Per-item absent state
+# TC-PWD-050  Absent without confirm_absent (file preserved)
+# TC-PWD-060  Absent with confirm_absent=true (file deleted)
+# TC-PWD-070  Per-user confirm_absent mixed
+# TC-PWD-080  Zero overrides
+
+# ---------------------------------------------------------------------------
+# TC-PWD-010 | Per-user attributes (full config)
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-PWD-010 | Per-user attributes"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_010__dir }}"
+        passwords__age_public_keys:
+          - "{{ __passwords__tc__age_pub_key }}"
+        passwords__password_min_lower: 3
+        passwords__password_min_upper: 3
+        passwords__password_min_numeric: 3
+        passwords__password_min_special: 3
+        passwords__users:
+          - username: sysadmin
+          - username: root
+            sops_filename: root_admin.sops.yaml
+          - username: devops
+            age_public_keys:
+              - "{{ __passwords__tc__age_pub_key }}"
+          - username: webapp
+            metadata:
+              url: "https://webapp.example.com"
+              environment: production
+              notes: "Primary webapp service account"
+          - username: old_user
+            state: absent
+
+# ---------------------------------------------------------------------------
+# TC-PWD-020 | Empty users list
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-PWD-020 | Empty users list"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_020__dir }}"
+        passwords__age_public_keys:
+          - "{{ __passwords__tc__age_pub_key }}"
+        passwords__users: []
+
+# ---------------------------------------------------------------------------
+# TC-PWD-030 | Global absent state
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-PWD-030 | Global absent state"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_030__dir }}"
+        passwords__age_public_keys:
+          - "{{ __passwords__tc__age_pub_key }}"
+        passwords__state: absent
+        passwords__confirm_absent: true
+        passwords__users:
+          - username: absent_user_a
+          - username: absent_user_b
+
+# ---------------------------------------------------------------------------
+# TC-PWD-040 | Per-item absent state
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-PWD-040 | Per-item absent state"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_040__dir }}"
+        passwords__age_public_keys:
+          - "{{ __passwords__tc__age_pub_key }}"
+        passwords__users:
+          - username: present_user
+          - username: absent_user
+            state: absent
+
+# ---------------------------------------------------------------------------
+# TC-PWD-050 | Absent without confirm_absent (file preserved)
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-PWD-050 | Absent without confirm_absent"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_050__dir }}"
+        passwords__age_public_keys:
+          - "{{ __passwords__tc__age_pub_key }}"
+        passwords__state: absent
+        passwords__confirm_absent: false
+        passwords__users:
+          - username: confirm_user
+
+# ---------------------------------------------------------------------------
+# TC-PWD-060 | Absent with confirm_absent=true (file deleted)
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-PWD-060 | Absent with confirm_absent=true"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_060__dir }}"
+        passwords__age_public_keys:
+          - "{{ __passwords__tc__age_pub_key }}"
+        passwords__state: absent
+        passwords__confirm_absent: true
+        passwords__users:
+          - username: confirm_user
+
+# ---------------------------------------------------------------------------
+# TC-PWD-070 | Per-user confirm_absent mixed
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-PWD-070 | Per-user confirm_absent mixed"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_070__dir }}"
+        passwords__age_public_keys:
+          - "{{ __passwords__tc__age_pub_key }}"
+        passwords__state: absent
+        passwords__confirm_absent: false
+        passwords__users:
+          - username: keep_user
+          - username: delete_user
+            confirm_absent: true
+
+# ---------------------------------------------------------------------------
+# TC-PWD-080 | Zero overrides
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-PWD-080 | Zero overrides"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_080__dir }}"
+        passwords__age_public_keys:
+          - "{{ __passwords__tc__age_pub_key }}"
+        passwords__users:
+          - username: minimal_user
+
+# ---------------------------------------------------------------------------
+# TC-PWD-090 | Encrypt via sops_config_path
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-PWD-090 | sops_config_path"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_090__dir }}"
+        passwords__sops_config_path: >-
+          {{ __passwords__tc__ephemeral }}/sops-config.yaml
+        passwords__users:
+          - username: config_path_user
+
+# ---------------------------------------------------------------------------
+# TC-PWD-100 | Encrypt via SOPS_AGE_RECIPIENTS env var
+# ---------------------------------------------------------------------------
+
+- name: "Converge | TC-PWD-100 | SOPS_AGE_RECIPIENTS env var"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  environment:
+    SOPS_AGE_RECIPIENTS: "{{ __passwords__tc__age_pub_key }}"
+  roles:
+    - role: devlbo.secrets.passwords
+      vars:
+        passwords__output_dir: "{{ __passwords__tc_100__dir }}"
+        passwords__users:
+          - username: env_var_user

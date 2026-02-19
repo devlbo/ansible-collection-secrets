@@ -1,0 +1,131 @@
+---
+# devlbo.secrets.ssh_keys - Molecule prepare playbook
+#
+# Runs ONCE before converge. Creates prerequisite SSH key files for
+# absent-state tests. Not re-run during idempotency checks, which is why
+# setup plays for absent-state tests live here rather than in converge.yml.
+#
+# Test ID abbreviation: SSH
+
+# ---------------------------------------------------------------------------
+# Generate a fresh age key pair scoped to this Molecule run
+# ---------------------------------------------------------------------------
+# Writes two files into the ephemeral directory:
+#   age-key.txt     — full key file (private + public), used by SOPS decrypt
+#   age-pub-key.txt — public key only, read by vars/main.yml at play time
+#
+# All converge/verify plays pick up the public key via vars/main.yml.
+# All verify decrypt tasks set SOPS_AGE_KEY_FILE=.../age-key.txt in their
+# environment so SOPS can find the private key at verification time.
+
+- name: "Prepare | Generate age key pair for this Molecule run"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: "Prepare | Generate age key pair"
+      ansible.builtin.command:
+        cmd: "age-keygen -o {{ __ssh_keys__tc__ephemeral }}/age-key.txt"
+      changed_when: true
+
+    - name: "Prepare | Extract age public key"
+      ansible.builtin.shell:
+        cmd: >-
+          age-keygen -y {{ __ssh_keys__tc__ephemeral }}/age-key.txt
+          > {{ __ssh_keys__tc__ephemeral }}/age-pub-key.txt
+      changed_when: true
+
+    - name: "Prepare | Write sops-config.yaml for sops_config_path tests"
+      ansible.builtin.copy:
+        dest: "{{ __ssh_keys__tc__ephemeral }}/sops-config.yaml"
+        content: |
+          ---
+          creation_rules:
+            - age: {{ __ssh_keys__tc__age_pub_key | trim }}
+        mode: "0600"
+
+# ---------------------------------------------------------------------------
+# TC-SSH-050 | Create users that the global absent test will delete
+# ---------------------------------------------------------------------------
+
+- name: "Prepare | TC-SSH-050 | Create required users for the test"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_050__dir }}"
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__users:
+      - username: absent_user_a
+        passphrase: false
+      - username: absent_user_b
+        passphrase: false
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-070 | Create user that the absent-without-confirm test uses
+# ---------------------------------------------------------------------------
+
+- name: "Prepare | TC-SSH-070 | Create required users for the test"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_070__dir }}"
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__users:
+      - username: confirm_user
+        passphrase: false
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-080 | Create user that the absent-with-confirm test deletes
+# ---------------------------------------------------------------------------
+
+- name: "Prepare | TC-SSH-080 | Create required users for the test"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_080__dir }}"
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__users:
+      - username: confirm_user
+        passphrase: false
+  roles:
+    - role: devlbo.secrets.ssh_keys
+
+# ---------------------------------------------------------------------------
+# TC-SSH-090 | Create users for the per-user confirm_absent test
+# ---------------------------------------------------------------------------
+
+- name: "Prepare | TC-SSH-090 | Create required users for the test"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    ssh_keys__output_dir: "{{ __ssh_keys__tc_090__dir }}"
+    ssh_keys__age_public_keys:
+      - "{{ __ssh_keys__tc__age_pub_key }}"
+    ssh_keys__users:
+      - username: keep_user
+        passphrase: false
+      - username: delete_user
+        passphrase: false
+  roles:
+    - role: devlbo.secrets.ssh_keys

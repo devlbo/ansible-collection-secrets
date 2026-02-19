@@ -1,0 +1,127 @@
+---
+# devlbo.secrets.ssh_keys - Default variables (public API)
+#
+# All public variables use the 'ssh_keys__' prefix (double underscore).
+# Override these in group_vars, host_vars, or playbook vars.
+#
+# This role generates SSH keypairs with optional passphrase protection
+# and persists the metadata into per-user SOPS-encrypted YAML files
+# using age keys.
+
+# ---------------------------------------------------------------------------
+# Global state toggle
+# ---------------------------------------------------------------------------
+# Set to 'absent' to remove SOPS files and SSH key artifacts for all users.
+# Requires ssh_keys__confirm_absent=true for files to actually be deleted.
+# Individual user 'state' overrides this when ssh_keys__state is 'present'.
+ssh_keys__state: present
+
+# ---------------------------------------------------------------------------
+# User definitions
+# ---------------------------------------------------------------------------
+# List of users for which SSH keys should be generated.
+# Each item supports the following attributes:
+#
+#   username:            (required) Username. Used in default filenames.
+#   state:               (optional) 'present' or 'absent'. Default: present.
+#   passphrase:          (optional) Override global ssh_keys__passphrase.
+#   ssh_key_name:        (optional) Override SSH key filename (without path).
+#                                   Default: id_<type>_<username>
+#   ssh_key_comment:     (optional) Override SSH key comment.
+#                                   Default: <username>
+#   ssh_key_in_sops:     (optional) Override global ssh_keys__ssh_key_in_sops.
+#                                   Default: global setting.
+#   sops_filename:       (optional) Override SOPS output filename.
+#                                   Default: <keyname>.sops.yaml
+#   age_public_keys:     (optional) Override global ssh_keys__age_public_keys
+#                                   for this user. Default: global list.
+#   metadata:            (optional) Free-form dict included in SOPS output.
+#                                   Omitted when empty. Default: {}.
+#
+# An empty list is a valid no-op.
+ssh_keys__users: []
+
+# ---------------------------------------------------------------------------
+# Passphrase generation
+# ---------------------------------------------------------------------------
+# Global default for SSH key passphrase generation.
+# When false, keys are created unprotected.
+# Per-user passphrase attribute overrides this.
+ssh_keys__passphrase: true
+
+# ---------------------------------------------------------------------------
+# SSH key configuration
+# ---------------------------------------------------------------------------
+
+# SSH key type. Choices: ed25519, rsa, ecdsa.
+ssh_keys__ssh_key_type: ed25519
+
+# SSH key size in bits. Only used for RSA (e.g., 4096). Ignored for ed25519.
+ssh_keys__ssh_key_bits: null
+
+# When true, the SOPS file additionally embeds the raw SSH private key
+# content (ssh_private_key field) alongside the file path
+# (ssh_private_key_path field).
+ssh_keys__ssh_key_in_sops: false
+
+# ---------------------------------------------------------------------------
+# Passphrase policy (for SSH key protection)
+# ---------------------------------------------------------------------------
+
+# Total length of the generated SSH key passphrase.
+ssh_keys__passphrase_length: 48
+
+# Minimum number of lowercase letters in the passphrase.
+ssh_keys__passphrase_min_lower: 6
+
+# Minimum number of uppercase letters in the passphrase.
+ssh_keys__passphrase_min_upper: 6
+
+# Minimum number of numeric characters in the passphrase.
+ssh_keys__passphrase_min_numeric: 6
+
+# Minimum number of special characters in the passphrase.
+ssh_keys__passphrase_min_special: 6
+
+# Special characters allowed in passphrases.
+ssh_keys__passphrase_special_chars: "!@#$%^&*()_+-=[]{};:,.<>?"
+
+# ---------------------------------------------------------------------------
+# SOPS / age encryption
+# ---------------------------------------------------------------------------
+
+# Directory where SSH key files and SOPS-encrypted metadata are written.
+# Both key files and SOPS files are co-located here. Must not be empty.
+ssh_keys__output_dir: "~/.secrets/.ssh"
+
+# List of age public keys for SOPS encryption.
+# When empty, SOPS falls back to sops_config_path, SOPS_AGE_RECIPIENTS env var,
+# or automatic .sops.yaml configuration file discovery (in that order).
+ssh_keys__age_public_keys: []
+
+# Path to a .sops.yaml config file for SOPS encryption.
+# When non-empty and ssh_keys__age_public_keys is empty, SOPS uses this config
+# file instead of automatic .sops.yaml discovery. Ignored when age_public_keys
+# is set. When empty, falls back to SOPS_AGE_RECIPIENTS env var or .sops.yaml
+# discovery.
+ssh_keys__sops_config_path: ""
+
+# ---------------------------------------------------------------------------
+# Overwrite behavior
+# ---------------------------------------------------------------------------
+# Defaults to false (skip existing). A warning message is displayed when
+# an existing SOPS file is skipped.
+
+# When true, regenerate SSH keypair and overwrite existing SOPS file.
+ssh_keys__overwrite: false
+
+# ---------------------------------------------------------------------------
+# Absent state safety gate
+# ---------------------------------------------------------------------------
+# Defaults to false. When false, absent state shows a warning listing
+# files that would be deleted and skips deletion. Set to true only after
+# reviewing the dry-run output.
+# Per-user confirm_absent attribute overrides this global setting.
+
+# When true, allow deletion of existing SOPS files and SSH key artifacts.
+ssh_keys__confirm_absent: false

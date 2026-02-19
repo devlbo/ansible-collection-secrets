@@ -1,0 +1,258 @@
+---
+# devlbo.secrets.ssh_keys - Prepare phase
+#
+# Runs before the present/absent loops. Builds per-user file-existence lookup
+# dicts so that main.yml can gate loop iterations without repeating stat calls
+# inside present.yml or absent.yml.
+#
+# Outputs (play-scoped facts):
+#   __ssh_keys__sops_exists  — dict {username: bool}
+#   __ssh_keys__priv_exists  — dict {username: bool}
+#   __ssh_keys__pub_exists   — dict {username: bool}
+
+# ---------------------------------------------------------------------------
+# Resolve per-user key name (needed for path computation below)
+# ---------------------------------------------------------------------------
+# Note: __ssh_keys__ssh_key_name is a lazy var in vars/main.yml that resolves
+# per __ssh_keys__item iteration. We use __ssh_keys__item as the loop_var here
+# so that lazy vars resolve correctly for each user.
+
+# ---------------------------------------------------------------------------
+# Stat SOPS files for all users
+# ---------------------------------------------------------------------------
+
+- name: Prepare | Stat SOPS file for each user
+  ansible.builtin.stat:
+    path: >-
+      {{
+        [__ssh_keys__output_dir,
+         __ssh_keys__item.sops_filename
+         | default(
+             (
+               __ssh_keys__item.ssh_key_name
+               | default(
+                   'id_' ~ ssh_keys__ssh_key_type
+                   ~ '_' ~ __ssh_keys__item.username
+                 )
+             ) ~ '.sops.yaml'
+           )]
+        | ansible.builtin.path_join
+      }}
+  loop: "{{ ssh_keys__users }}"
+  loop_control:
+    loop_var: __ssh_keys__item
+    label: "{{ __ssh_keys__item.username }}"
+  register: __ssh_keys__stat_sops
+  tags:
+    - ssh_keys
+
+# ---------------------------------------------------------------------------
+# Stat private key files for all users
+# ---------------------------------------------------------------------------
+
+- name: Prepare | Stat private key file for each user
+  ansible.builtin.stat:
+    path: >-
+      {{
+        [__ssh_keys__output_dir,
+         __ssh_keys__item.ssh_key_name
+         | default(
+             'id_' ~ ssh_keys__ssh_key_type
+             ~ '_' ~ __ssh_keys__item.username
+           )]
+        | ansible.builtin.path_join
+      }}
+  loop: "{{ ssh_keys__users }}"
+  loop_control:
+    loop_var: __ssh_keys__item
+    label: "{{ __ssh_keys__item.username }}"
+  register: __ssh_keys__stat_priv
+  tags:
+    - ssh_keys
+
+# ---------------------------------------------------------------------------
+# Stat public key files for all users
+# ---------------------------------------------------------------------------
+
+- name: Prepare | Stat public key file for each user
+  ansible.builtin.stat:
+    path: >-
+      {{
+        [__ssh_keys__output_dir,
+         (__ssh_keys__item.ssh_key_name
+          | default(
+              'id_' ~ ssh_keys__ssh_key_type
+              ~ '_' ~ __ssh_keys__item.username
+            )) ~ '.pub']
+        | ansible.builtin.path_join
+      }}
+  loop: "{{ ssh_keys__users }}"
+  loop_control:
+    loop_var: __ssh_keys__item
+    label: "{{ __ssh_keys__item.username }}"
+  register: __ssh_keys__stat_pub
+  tags:
+    - ssh_keys
+
+# ---------------------------------------------------------------------------
+# Build lookup dicts
+# ---------------------------------------------------------------------------
+
+# set_fact permitted: depends on __ssh_keys__stat_sops / _priv / _pub registers.
+- name: Prepare | Build file-existence lookup dicts
+  ansible.builtin.set_fact:
+    __ssh_keys__sops_exists: >-
+      {{
+        dict(
+          ssh_keys__users | map(attribute='username')
+          | zip(
+              __ssh_keys__stat_sops.results
+              | map(attribute='stat')
+              | map(attribute='exists')
+            )
+        )
+      }}
+    __ssh_keys__priv_exists: >-
+      {{
+        dict(
+          ssh_keys__users | map(attribute='username')
+          | zip(
+              __ssh_keys__stat_priv.results
+              | map(attribute='stat')
+              | map(attribute='exists')
+            )
+        )
+      }}
+    __ssh_keys__pub_exists: >-
+      {{
+        dict(
+          ssh_keys__users | map(attribute='username')
+          | zip(
+              __ssh_keys__stat_pub.results
+              | map(attribute='stat')
+              | map(attribute='exists')
+            )
+        )
+      }}
+  tags:
+    - ssh_keys
+
+# ---------------------------------------------------------------------------
+# Emit skip messages (present users whose files already exist, overwrite=false)
+# ---------------------------------------------------------------------------
+
+- name: Prepare | Skip present tasks — SOPS file exists
+  ansible.builtin.debug:
+    msg: >-
+      SOPS file '{{
+        __ssh_keys__item.sops_filename
+        | default(
+            (
+              __ssh_keys__item.ssh_key_name
+              | default(
+                  'id_' ~ ssh_keys__ssh_key_type
+                  ~ '_' ~ __ssh_keys__item.username
+                )
+            ) ~ '.sops.yaml'
+          )
+      }}' already exists. Skipping {{ __ssh_keys__item.username }}.
+      Set ssh_keys__overwrite=true to overwrite.
+  loop: "{{ ssh_keys__users }}"
+  loop_control:
+    loop_var: __ssh_keys__item
+    label: "{{ __ssh_keys__item.username }}"
+  when:
+    - ssh_keys__state == 'present'
+    - (__ssh_keys__item.state | default('present')) == 'present'
+    - __ssh_keys__sops_exists[__ssh_keys__item.username]
+      or __ssh_keys__priv_exists[__ssh_keys__item.username]
+    - not (ssh_keys__overwrite | bool)
+  tags:
+    - ssh_keys
+
+# ---------------------------------------------------------------------------
+# Emit absent dry-run warnings (absent users whose files exist but
+# confirm_absent=false)
+# ---------------------------------------------------------------------------
+
+- name: Prepare | Skip absent tasks — confirm_absent required to delete
+  ansible.builtin.debug:
+    msg: >-
+      "[ssh_keys] DRY RUN: would delete the following files:"
+      {{
+        (
+          (
+            [
+              [__ssh_keys__output_dir,
+               __ssh_keys__item.sops_filename
+               | default(
+                   (
+                     __ssh_keys__item.ssh_key_name
+                     | default(
+                         'id_' ~ ssh_keys__ssh_key_type
+                         ~ '_' ~ __ssh_keys__item.username
+                       )
+                   ) ~ '.sops.yaml'
+                 )]
+              | ansible.builtin.path_join
+            ]
+            if __ssh_keys__sops_exists[__ssh_keys__item.username]
+            else []
+          ) + (
+            [
+              [__ssh_keys__output_dir,
+               __ssh_keys__item.ssh_key_name
+               | default(
+                   'id_' ~ ssh_keys__ssh_key_type
+                   ~ '_' ~ __ssh_keys__item.username
+                 )]
+              | ansible.builtin.path_join
+            ]
+            if __ssh_keys__priv_exists[__ssh_keys__item.username]
+            else []
+          ) + (
+            [
+              [__ssh_keys__output_dir,
+               (__ssh_keys__item.ssh_key_name
+                | default(
+                    'id_' ~ ssh_keys__ssh_key_type
+                    ~ '_' ~ __ssh_keys__item.username
+                  )) ~ '.pub']
+              | ansible.builtin.path_join
+            ]
+            if __ssh_keys__pub_exists[__ssh_keys__item.username]
+            else []
+          )
+        ) | join(', ')
+      }}.
+      Set ssh_keys__confirm_absent=true (or per-user confirm_absent: true)
+      to allow deletion.
+  loop: "{{ ssh_keys__users }}"
+  loop_control:
+    loop_var: __ssh_keys__item
+    label: "{{ __ssh_keys__item.username }}"
+  when:
+    - >-
+      ssh_keys__state == 'absent'
+      or (__ssh_keys__item.state | default('present')) == 'absent'
+    - >-
+      __ssh_keys__sops_exists[__ssh_keys__item.username]
+      or __ssh_keys__priv_exists[__ssh_keys__item.username]
+      or __ssh_keys__pub_exists[__ssh_keys__item.username]
+    - not ((__ssh_keys__item.confirm_absent
+            | default(ssh_keys__confirm_absent)) | bool)
+  tags:
+    - ssh_keys
+
+# ---------------------------------------------------------------------------
+# Create output directory (when at least one present user will be processed)
+# ---------------------------------------------------------------------------
+
+- name: Prepare | Create output directory
+  ansible.builtin.file:
+    path: "{{ __ssh_keys__output_dir }}"
+    state: directory
+    mode: "0700"
+  when: __ssh_keys__has_present_users | bool
+  tags:
+    - ssh_keys

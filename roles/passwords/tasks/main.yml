@@ -1,0 +1,63 @@
+---
+# devlbo.secrets.passwords - Main entry point
+#
+# Flow: validate → prepare → loop present → loop absent → noop
+
+- name: Validate role inputs
+  ansible.builtin.include_tasks: validate.yml
+  when:
+    - passwords__users is defined
+    - not passwords__users | length == 0
+  tags:
+    - passwords
+
+- name: Prepare
+  ansible.builtin.include_tasks: prepare.yml
+  when:
+    - passwords__users is defined
+    - not passwords__users | length == 0
+  tags:
+    - passwords
+
+- name: Converge to present state
+  ansible.builtin.include_tasks: present.yml
+  loop: "{{ passwords__users }}"
+  loop_control:
+    loop_var: __passwords__item
+    label: "{{ __passwords__item.username }}"
+  when:
+    - passwords__users is defined
+    - not passwords__users | length == 0
+    - passwords__state == 'present'
+    - (__passwords__item.state | default('present')) == 'present'
+    - >-
+      not __passwords__file_exists[__passwords__item.username]
+      or (passwords__overwrite | bool)
+  tags:
+    - passwords
+
+- name: Converge to absent state
+  ansible.builtin.include_tasks: absent.yml
+  loop: "{{ passwords__users }}"
+  loop_control:
+    loop_var: __passwords__item
+    label: "{{ __passwords__item.username }}"
+  when:
+    - passwords__users is defined
+    - not passwords__users | length == 0
+    - >-
+      passwords__state == 'absent'
+      or (__passwords__item.state | default('present')) == 'absent'
+    - __passwords__file_exists[__passwords__item.username]
+    - >-
+      (__passwords__item.confirm_absent
+       | default(passwords__confirm_absent)) | bool
+  tags:
+    - passwords
+
+- name: Do nothing (skip, no-op)
+  ansible.builtin.debug:
+    msg: "passwords__users is empty. Nothing to do."
+  when: passwords__users | length == 0
+  tags:
+    - passwords

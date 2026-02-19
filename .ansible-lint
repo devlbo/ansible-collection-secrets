@@ -1,0 +1,8 @@
+---
+profile: production
+loop_var_prefix: "^(__)?[a-z][a-z0-9_]*__[a-z][a-z0-9_]*$"
+var_naming_pattern: "^(__)?[a-z][a-z0-9_]*__[a-z][a-z0-9_]*$"
+skip_list: []
+exclude_paths:
+  - .github/
+  - .venv/

@@ -1,0 +1,235 @@
+---
+# devlbo.secrets.ssh_keys - Input validation
+#
+# All precondition checks run here before any changes are made.
+# Fail early with clear messages including variable name, constraint,
+# and actual value.
+#
+# Type checking and valid-value enforcement (state choices, list types,
+# enum choices) are handled by meta/argument_specs.yml, which Ansible
+# validates before the role runs. This file covers business logic only:
+# tool prerequisites, null/empty guards, cross-field constraints, and
+# security floors.
+
+# ---------------------------------------------------------------------------
+# Tool prerequisites
+# ---------------------------------------------------------------------------
+
+- name: Validate | Verify sops binary is available
+  ansible.builtin.command:
+    cmd: which sops
+  register: __ssh_keys__sops_check
+  changed_when: false
+  failed_when: false
+  check_mode: false  # binary presence check must run even in --check mode
+  tags:
+    - ssh_keys
+
+- name: Validate | Assert sops is installed
+  ansible.builtin.assert:
+    that:
+      - __ssh_keys__sops_check.rc == 0
+    fail_msg: >-
+      sops binary not found on the control node. Install sops before running
+      this role. See https://github.com/getsops/sops
+    quiet: true
+  tags:
+    - ssh_keys
+
+- name: Validate | Verify age binary is available
+  ansible.builtin.command:
+    cmd: which age
+  register: __ssh_keys__age_check
+  changed_when: false
+  failed_when: false
+  check_mode: false  # binary presence check must run even in --check mode
+  tags:
+    - ssh_keys
+
+- name: Validate | Assert age is installed
+  ansible.builtin.assert:
+    that:
+      - __ssh_keys__age_check.rc == 0
+    fail_msg: >-
+      age binary not found on the control node. Install age before running
+      this role. See https://github.com/FiloSottile/age
+    quiet: true
+  tags:
+    - ssh_keys
+
+# ---------------------------------------------------------------------------
+# User validation
+# ---------------------------------------------------------------------------
+
+- name: Validate | Assert each user entry has a username
+  ansible.builtin.assert:
+    that:
+      - __ssh_keys__item.username is defined
+      - __ssh_keys__item.username | length > 0
+    fail_msg: >-
+      Every entry in ssh_keys__users must have a non-empty 'username'
+      attribute. Entry at index {{ idx }} is missing or empty.
+    quiet: true
+  loop: "{{ ssh_keys__users }}"
+  loop_control:
+    loop_var: __ssh_keys__item
+    index_var: idx
+    label: "{{ __ssh_keys__item.username | default('UNDEFINED') }}"
+  tags:
+    - ssh_keys
+
+- name: Validate | Assert no duplicate usernames
+  ansible.builtin.assert:
+    that:
+      - >-
+        ssh_keys__users | map(attribute='username') | list
+        == ssh_keys__users | map(attribute='username') | unique | list
+    fail_msg: >-
+      ssh_keys__users contains duplicate username values.
+      Each username must be unique.
+    quiet: true
+  tags:
+    - ssh_keys
+
+# ---------------------------------------------------------------------------
+# Passphrase policy validation
+# ---------------------------------------------------------------------------
+
+- name: Validate | Assert passphrase length meets minimum
+  ansible.builtin.assert:
+    that:
+      - ssh_keys__passphrase_length | int >= __ssh_keys__min_passphrase_length
+    fail_msg: >-
+      ssh_keys__passphrase_length must be
+      >= {{ __ssh_keys__min_passphrase_length }},
+      got {{ ssh_keys__passphrase_length }}.
+    quiet: true
+  when: ssh_keys__passphrase | bool
+  tags:
+    - ssh_keys
+
+- name: Validate | Assert passphrase min_* sum does not exceed length
+  ansible.builtin.assert:
+    that:
+      - >-
+        (ssh_keys__passphrase_min_lower | int
+         + ssh_keys__passphrase_min_upper | int
+         + ssh_keys__passphrase_min_numeric | int
+         + ssh_keys__passphrase_min_special | int)
+        <= (ssh_keys__passphrase_length | int)
+    fail_msg: >-
+      Sum of passphrase min_* constraints
+      ({{ ssh_keys__passphrase_min_lower }}
+      + {{ ssh_keys__passphrase_min_upper }}
+      + {{ ssh_keys__passphrase_min_numeric }}
+      + {{ ssh_keys__passphrase_min_special }}
+      = {{ ssh_keys__passphrase_min_lower | int
+           + ssh_keys__passphrase_min_upper | int
+           + ssh_keys__passphrase_min_numeric | int
+           + ssh_keys__passphrase_min_special | int }})
+      exceeds ssh_keys__passphrase_length ({{ ssh_keys__passphrase_length }}).
+    quiet: true
+  when: ssh_keys__passphrase | bool
+  tags:
+    - ssh_keys
+
+- name: Validate | Assert passphrase special_chars is not empty
+  ansible.builtin.assert:
+    that:
+      - ssh_keys__passphrase_special_chars | length > 0
+    fail_msg: >-
+      ssh_keys__passphrase_special_chars must not be empty when
+      ssh_keys__passphrase_min_special > 0.
+    quiet: true
+  when:
+    - ssh_keys__passphrase | bool
+    - ssh_keys__passphrase_min_special | int > 0
+  tags:
+    - ssh_keys
+
+# ---------------------------------------------------------------------------
+# Output configuration validation
+# ---------------------------------------------------------------------------
+
+- name: Validate | Assert output directory is not empty
+  ansible.builtin.assert:
+    that:
+      - ssh_keys__output_dir | length > 0
+    fail_msg: >-
+      ssh_keys__output_dir must not be empty. Provide a valid directory path
+      for SSH key files and SOPS-encrypted metadata.
+    quiet: true
+  tags:
+    - ssh_keys
+
+# ---------------------------------------------------------------------------
+# SOPS config path validation
+# ---------------------------------------------------------------------------
+
+- name: Validate | Assert global sops_config_path exists when set
+  ansible.builtin.stat:
+    path: "{{ ssh_keys__sops_config_path }}"
+  register: __ssh_keys__sops_config_stat
+  when: ssh_keys__sops_config_path | length > 0
+  tags:
+    - ssh_keys
+
+- name: Validate | Assert global sops_config_path is a file
+  ansible.builtin.assert:
+    that:
+      - __ssh_keys__sops_config_stat.stat.exists
+      - __ssh_keys__sops_config_stat.stat.isreg
+    fail_msg: >-
+      ssh_keys__sops_config_path '{{ ssh_keys__sops_config_path }}' does not
+      exist or is not a regular file. Provide a valid path to a .sops.yaml
+      config file.
+    quiet: true
+  when: ssh_keys__sops_config_path | length > 0
+  tags:
+    - ssh_keys
+
+# ---------------------------------------------------------------------------
+# Age public key format validation
+# ---------------------------------------------------------------------------
+
+- name: Validate | Assert global age public keys have age1 prefix
+  ansible.builtin.assert:
+    that:
+      - __ssh_keys__key is match('^age1[a-z0-9]+$')
+    fail_msg: >-
+      Invalid age public key '{{ __ssh_keys__key }}' in
+      ssh_keys__age_public_keys. age public keys must start with 'age1'
+      and contain only lowercase alphanumeric characters.
+    quiet: true
+  loop: "{{ ssh_keys__age_public_keys }}"
+  loop_control:
+    loop_var: __ssh_keys__key
+    label: "{{ __ssh_keys__key }}"
+  when: ssh_keys__age_public_keys | length > 0
+  tags:
+    - ssh_keys
+
+- name: Validate | Assert per-user age public keys have age1 prefix
+  ansible.builtin.assert:
+    that:
+      - >-
+        __ssh_keys__item.age_public_keys
+        | select('match', '^age1[a-z0-9]+$')
+        | list
+        | length
+        == __ssh_keys__item.age_public_keys | length
+    fail_msg: >-
+      One or more age public keys in
+      ssh_keys__users[username={{ __ssh_keys__item.username }}].age_public_keys
+      are invalid. Each key must start with 'age1' and contain only lowercase
+      alphanumeric characters. Got: {{ __ssh_keys__item.age_public_keys }}.
+    quiet: true
+  loop: "{{ ssh_keys__users }}"
+  loop_control:
+    loop_var: __ssh_keys__item
+    label: "{{ __ssh_keys__item.username | default('UNDEFINED') }}"
+  when:
+    - __ssh_keys__item.age_public_keys is defined
+    - __ssh_keys__item.age_public_keys | length > 0
+  tags:
+    - ssh_keys

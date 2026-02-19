@@ -1,0 +1,168 @@
+---
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+  pull_request:
+    branches: [main]
+
+env:
+  ANSIBLE_FORCE_COLOR: "1"
+  PY_COLORS: "1"
+
+concurrency:
+  group: ci-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  # -------------------------------------------------------------------
+  # Lint: yamllint + ansible-lint
+  # -------------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install lint dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run yamllint
+        run: yamllint -c .yamllint .
+
+      - name: Run ansible-lint
+        run: ansible-lint
+
+  # -------------------------------------------------------------------
+  # Test: run each role's default Molecule scenario
+  # -------------------------------------------------------------------
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install sops
+        run: |
+          curl -fsSL -o /tmp/sops.deb \
+            https://github.com/getsops/sops/releases/download/v3.11.0/sops_3.11.0_amd64.deb
+          sudo dpkg -i /tmp/sops.deb
+
+      - name: Install age
+        run: |
+          curl -fsSL -o /tmp/age.tar.gz \
+            https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz
+          tar -xzf /tmp/age.tar.gz -C /tmp
+          sudo mv /tmp/age/age /tmp/age/age-keygen /usr/local/bin/
+
+      - name: Install Python dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Cache Ansible Galaxy collections
+        uses: actions/cache@v5
+        with:
+          path: ~/.ansible/collections
+          key: galaxy-${{ hashFiles('requirements.yml') }}
+          restore-keys: galaxy-
+
+      - name: Install collection dependencies
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Run role tests
+        run: ./tests/run-role-tests.sh
+
+  # -------------------------------------------------------------------
+  # Build: create collection tarball
+  # -------------------------------------------------------------------
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install ansible-core
+        run: pip install ansible-core
+
+      - name: Build collection
+        run: ansible-galaxy collection build --force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: collection-tarball
+          path: devlbo-secrets-*.tar.gz
+          retention-days: 30
+
+  # -------------------------------------------------------------------
+  # Release: publish to Galaxy on tag push
+  # -------------------------------------------------------------------
+  release:
+    name: Release to Galaxy
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate tag matches galaxy.yml version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VER=$(grep '^version:' galaxy.yml | awk '{print $2}')
+          if [ "$TAG" != "$VER" ]; then
+            echo "::error::Tag $TAG does not match galaxy.yml version $VER"
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install ansible-core
+        run: pip install ansible-core
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: collection-tarball
+
+      - name: Publish to Ansible Galaxy
+        run: >-
+          ansible-galaxy collection publish
+          devlbo-secrets-*.tar.gz
+          --api-key "${{ secrets.GALAXY_API_KEY }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: devlbo-secrets-*.tar.gz
+          generate_release_notes: true

@@ -1,0 +1,84 @@
+---
+# devlbo.secrets.passwords - Internal constants
+#
+# These are internal to the role.
+# Do NOT override from inventory or playbook vars.
+# Prefixed with '__passwords__' (leading double underscore).
+
+# Minimum password length to prevent insecure configurations.
+__passwords__min_password_length: 16
+
+# ---------------------------------------------------------------------------
+# Per-user derived variables (lazy evaluation)
+# ---------------------------------------------------------------------------
+# These resolve per loop iteration because __passwords__item changes with
+# each include_tasks call. Lazy evaluation means they re-evaluate on every
+# reference, producing the correct value for the current user without any
+# set_fact task overhead.
+
+# Per-user sops filename override.
+# Default naming pattern: <username>.sops.yaml
+__passwords__sops_filename: >-
+  {{
+    __passwords__item.sops_filename
+    | default(__passwords__item.username ~ '.sops.yaml')
+  }}
+
+# Per-user Age keys list override.
+# Overrides the global age keys list.
+__passwords__age_public_keys: >-
+  {{
+    __passwords__item.age_public_keys
+    | default(passwords__age_public_keys)
+  }}
+
+# Per-user SOPS config path override.
+# Overrides the global sops_config_path.
+__passwords__sops_config_path: >-
+  {{
+    __passwords__item.sops_config_path
+    | default(passwords__sops_config_path)
+  }}
+
+# Per-user metadata override.
+# Free-form dict, omitted from SOPS output when empty.
+__passwords__metadata: >-
+  {{ __passwords__item.metadata | default({}) }}
+
+# ---------------------------------------------------------------------------
+# Per-user derived paths (lazy evaluation)
+# ---------------------------------------------------------------------------
+# Composed from lazy components above; re-evaluate per loop iteration.
+
+__passwords__sops_file_path: >-
+  {{
+    [passwords__output_dir, __passwords__sops_filename]
+    | ansible.builtin.path_join
+  }}
+
+# Per-user confirm_absent override.
+# When true, allows deletion of this user's SOPS file when state=absent.
+__passwords__confirm_absent: >-
+  {{
+    __passwords__item.confirm_absent
+    | default(passwords__confirm_absent)
+    | bool
+  }}
+
+# ---------------------------------------------------------------------------
+# Aggregate flag (lazy evaluation)
+# ---------------------------------------------------------------------------
+
+# True when the role state is 'present' AND at least one user entry has
+# state 'present' (explicit or defaulted). Used to skip directory creation
+# when no work will be done.
+__passwords__has_present_users: >-
+  {{
+    passwords__state == 'present'
+    and (
+      passwords__users
+      | map(attribute='state', default='present')
+      | select('equalto', 'present')
+      | list | length > 0
+    )
+  }}

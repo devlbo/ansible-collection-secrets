@@ -1,0 +1,216 @@
+# EditorConfig is awesome: https://editorconfig.org
+# EditorConfig helps maintain consistent coding styles across different editors and IDEs
+
+# top-most EditorConfig file - stop searching for .editorconfig files in parent directories
+root = true
+
+# ============================================================================
+# Default settings for all files
+# ============================================================================
+[*]
+# Character encoding
+charset = utf-8
+
+# Line endings - use Unix-style line feeds (LF)
+end_of_line = lf
+
+# Ensure file ends with a newline
+insert_final_newline = true
+
+# Remove trailing whitespace
+trim_trailing_whitespace = true
+
+# ============================================================================
+# Python Files
+# ============================================================================
+[*.py]
+# Use spaces for indentation (PEP 8)
+indent_style = space
+
+# 4 spaces per indentation level (PEP 8 standard)
+indent_size = 4
+
+# Maximum line length matches ruff.toml configuration
+max_line_length = 120
+
+# ============================================================================
+# Python Stub Files
+# ============================================================================
+[*.pyi]
+indent_style = space
+indent_size = 4
+
+# ============================================================================
+# Configuration Files - YAML
+# ============================================================================
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# Configuration Files - JSON
+# ============================================================================
+[*.{json,jsonc}]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# Configuration Files - TOML
+# ============================================================================
+[*.toml]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# Markdown Files
+# ============================================================================
+[*.md]
+# Use spaces for indentation
+indent_style = space
+indent_size = 2
+
+# Don't trim trailing whitespace (Markdown uses 2 spaces for line breaks)
+trim_trailing_whitespace = false
+
+# Soft wrap at 120 characters for readability (aligned with python max length)
+max_line_length = 120
+
+# ============================================================================
+# reStructuredText Files
+# ============================================================================
+[*.rst]
+indent_style = space
+indent_size = 3
+trim_trailing_whitespace = false
+
+# ============================================================================
+# Shell Scripts
+# ============================================================================
+[*.{sh,bash,zsh,fish}]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+
+# ============================================================================
+# Batch/CMD Files (Windows)
+# ============================================================================
+[*.{bat,cmd}]
+indent_style = space
+indent_size = 2
+end_of_line = crlf
+
+# ============================================================================
+# Makefiles
+# ============================================================================
+[Makefile]
+# Makefiles MUST use tabs
+indent_style = tab
+indent_size = 4
+
+[*.mk]
+indent_style = tab
+indent_size = 4
+
+# ============================================================================
+# GitHub Actions Workflow Files
+# ============================================================================
+[.github/workflows/*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# Package Manager Files
+# ============================================================================
+[{package.json,package-lock.json,pnpm-lock.yaml,yarn.lock}]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# Docker Files
+# ============================================================================
+[{Dockerfile,Dockerfile.*,*.dockerfile}]
+indent_style = space
+indent_size = 4
+
+[docker-compose*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# Git Configuration Files
+# ============================================================================
+[.gitattributes]
+indent_style = space
+indent_size = 2
+
+[.gitignore]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# Editor/IDE Configuration Files
+# ============================================================================
+[.editorconfig]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# CI/CD Configuration Files
+# ============================================================================
+[.gitlab-ci.yml]
+indent_style = space
+indent_size = 2
+
+[*.jenkinsfile]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# Documentation Configuration
+# ============================================================================
+[{*.cfg,*.conf,*.ini}]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# Web Files (if applicable)
+# ============================================================================
+[*.{html,htm}]
+indent_style = space
+indent_size = 2
+
+[*.{css,scss,sass,less}]
+indent_style = space
+indent_size = 2
+
+[*.{js,jsx,ts,tsx,mjs,cjs}]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# XML Files
+# ============================================================================
+[*.xml]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# SQL Files
+# ============================================================================
+[*.sql]
+indent_style = space
+indent_size = 2
+
+# ============================================================================
+# Notes about this configuration
+# ============================================================================
+# - All text files use UTF-8 encoding
+# - Unix-style line endings (LF) are enforced except for Windows batch files
+# - Trailing whitespace is removed except for Markdown and reStructuredText
+# - All files end with a newline
+# - Python files follow PEP 8 standards (4 spaces, 120 char line length)
+# - Configuration files use 2-space indentation for readability
+# - Makefiles use tabs as required by Make
+#
+# Supported editors: https://editorconfig.org/#pre-installed
+# To verify: Run `editorconfig --version` if editorconfig-core is installed

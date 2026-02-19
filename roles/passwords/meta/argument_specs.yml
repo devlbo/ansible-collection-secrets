@@ -1,0 +1,211 @@
+---
+argument_specs:
+  main:
+    short_description: >-
+      Provision encrypted user passwords.
+    description:
+      - >-
+        Generate user passwords, including password hashes, for a list of users,
+        then encrypts all secrets into per-user SOPS YAML files using age keys.
+      - >-
+        Runs on localhost. Requires sops and age binaries on the control node.
+      - >-
+        Requires community.general and community.sops collections.
+    author: Laurent Bodin
+    options:
+      passwords__state:
+        type: str
+        required: false
+        default: present
+        choices:
+          - present
+          - absent
+        description:
+          - Global state toggle for all users.
+          - >-
+            When 'absent', removes SOPS password files for all users in
+            passwords__users.
+
+      passwords__users:
+        type: list
+        elements: dict
+        required: false
+        default: []
+        description:
+          - List of user definitions for which passwords are generated.
+          - An empty list is a valid no-op.
+        options:
+          username:
+            type: str
+            required: true
+            description:
+              - >-
+                Username. Used in default SOPS filename.
+          state:
+            type: str
+            required: false
+            default: present
+            choices:
+              - present
+              - absent
+            description:
+              - Per-user state override.
+          sops_filename:
+            type: str
+            required: false
+            description:
+              - >-
+                Override SOPS output filename. Default is
+                <username>.sops.yaml.
+          age_public_keys:
+            type: list
+            elements: str
+            required: false
+            description:
+              - >-
+                Override global passwords__age_public_keys for this user.
+                When omitted, falls back to the global list. When set to an
+                empty list, forces .sops.yaml config file discovery.
+          metadata:
+            type: dict
+            required: false
+            default: {}
+            description:
+              - >-
+                Free-form metadata dict included in the SOPS output file.
+                When empty (default), the metadata key is omitted entirely.
+                Use for URLs, notes, environment tags, or any custom
+                annotations.
+          confirm_absent:
+            type: bool
+            required: false
+            description:
+              - >-
+                Per-user override for passwords__confirm_absent. When true,
+                allows deletion of this user's SOPS file when state=absent,
+                regardless of the global passwords__confirm_absent setting.
+          sops_config_path:
+            type: str
+            required: false
+            description:
+              - >-
+                Per-user override for passwords__sops_config_path. Path to a
+                .sops.yaml config file. Ignored when age_public_keys is set.
+
+      # -----------------------------------------------------------------
+      # Password policy
+      # -----------------------------------------------------------------
+
+      passwords__password_length:
+        type: int
+        required: false
+        default: 64
+        description:
+          - Total length of generated passwords. Minimum 16.
+
+      passwords__password_min_lower:
+        type: int
+        required: false
+        default: 8
+        description:
+          - Minimum lowercase letters in the password.
+
+      passwords__password_min_upper:
+        type: int
+        required: false
+        default: 8
+        description:
+          - Minimum uppercase letters in the password.
+
+      passwords__password_min_numeric:
+        type: int
+        required: false
+        default: 8
+        description:
+          - Minimum numeric characters in the password.
+
+      passwords__password_min_special:
+        type: int
+        required: false
+        default: 8
+        description:
+          - Minimum special characters in the password.
+
+      passwords__password_special_chars:
+        type: str
+        required: false
+        default: "!@#$%^&*()_+-=[]{};:,.<>?"
+        description:
+          - >-
+            Special characters allowed in passwords. Passed as
+            override_special to the random_string lookup.
+
+      passwords__password_hash_algorithm:
+        type: str
+        required: false
+        default: sha512
+        choices:
+          - sha512
+          - sha256
+          - bcrypt
+        description:
+          - Hash algorithm for password hashing.
+
+      # -----------------------------------------------------------------
+      # SOPS / age encryption
+      # -----------------------------------------------------------------
+
+      passwords__output_dir:
+        type: str
+        required: false
+        default: "~/.secrets"
+        description:
+          - Directory where SOPS-encrypted password files are written.
+
+      passwords__age_public_keys:
+        type: list
+        elements: str
+        required: false
+        default: []
+        description:
+          - >-
+            List of age public keys for SOPS encryption. When empty,
+            SOPS falls back to sops_config_path, SOPS_AGE_RECIPIENTS env var,
+            or automatic .sops.yaml config file discovery (in that order).
+
+      passwords__sops_config_path:
+        type: str
+        required: false
+        default: ""
+        description:
+          - >-
+            Path to a .sops.yaml config file for SOPS encryption. Used when
+            passwords__age_public_keys is empty. When non-empty, SOPS uses
+            this config file instead of automatic .sops.yaml discovery.
+            Ignored when age_public_keys is set. Falls back to
+            SOPS_AGE_RECIPIENTS env var or .sops.yaml discovery when empty.
+
+      # -----------------------------------------------------------------
+      # Overwrite behavior
+      # -----------------------------------------------------------------
+
+      passwords__overwrite:
+        type: bool
+        required: false
+        default: false
+        description:
+          - When true, regenerate passwords and overwrite existing SOPS files.
+
+      # -----------------------------------------------------------------
+      # Absent state safety gate
+      # -----------------------------------------------------------------
+
+      passwords__confirm_absent:
+        type: bool
+        required: false
+        default: false
+        description:
+          - >-
+            Safety gate for absent state. When false (default), deletion is
+            skipped and a warning is shown listing files that would be
+            removed. Set to true to allow deletion of existing SOPS files.

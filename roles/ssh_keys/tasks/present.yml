@@ -1,0 +1,287 @@
+---
+# devlbo.secrets.ssh_keys - Converge to present state (per user)
+#
+# This file is included once per user from main.yml.
+# The current user is available as __ssh_keys__item.
+# Entry is gated by main.yml: only runs when files do not exist
+# or ssh_keys__overwrite=true.
+#
+# Flow:
+#   block:
+#   1.  Create per-user temp directory
+#   2.  Generate passphrase (if enabled) or set empty
+#   3.  Generate SSH keypair in temp dir
+#   4.  Copy keys to output dir
+#   5.  Slurp private key content (if ssh_key_in_sops)
+#   6.  Build secrets data structure
+#   7.  Encrypt and write SOPS file
+#   8.  Wipe sensitive facts from memory
+#   9.  Summary
+#   always:
+#   10. Remove per-user temp directory
+#
+# Per-user feature flags and naming are lazy expressions in vars/main.yml.
+# They auto-resolve for each __ssh_keys__item iteration.
+
+- name: Present | Process SSH keys for {{ __ssh_keys__item.username }}
+  tags:
+    - ssh_keys
+  block:
+    # -----------------------------------------------------------------
+    # 1. Create per-user temp directory
+    # -----------------------------------------------------------------
+
+    - name: Present | Create per-user temp directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: "ssh_keys_{{ __ssh_keys__item.username }}_"
+      register: __ssh_keys__temp_dir
+      tags:
+        - ssh_keys
+
+    # -----------------------------------------------------------------
+    # 2. Generate passphrase (for SSH key protection)
+    # -----------------------------------------------------------------
+
+    # set_fact permitted: lookup('random_string') is non-idempotent.
+    - name: Present | Generate SSH key passphrase
+      ansible.builtin.set_fact:
+        __ssh_keys__passphrase: >-
+          {{
+            lookup(
+              'community.general.random_string',
+              length=ssh_keys__passphrase_length | int,
+              min_lower=ssh_keys__passphrase_min_lower | int,
+              min_upper=ssh_keys__passphrase_min_upper | int,
+              min_numeric=ssh_keys__passphrase_min_numeric | int,
+              min_special=ssh_keys__passphrase_min_special | int,
+              override_special=ssh_keys__passphrase_special_chars
+            ) | trim
+          }}
+      when:
+        - __ssh_keys__do_passphrase | bool
+      no_log: true
+      tags:
+        - ssh_keys
+
+    # set_fact permitted: same reason as above (same variable).
+    - name: Present | Set empty passphrase when disabled
+      ansible.builtin.set_fact:
+        __ssh_keys__passphrase: ""
+      when:
+        - not (__ssh_keys__do_passphrase | bool)
+      no_log: true
+      tags:
+        - ssh_keys
+
+    # -----------------------------------------------------------------
+    # 3. Generate SSH keypair in temp dir
+    # -----------------------------------------------------------------
+    # Keys are always generated in the per-user temp directory.
+    # force: true because the temp dir is always fresh.
+
+    - name: Present | Generate SSH keypair
+      community.crypto.openssh_keypair:
+        path: "{{ __ssh_keys__temp_dir.path }}/{{ __ssh_keys__ssh_key_name }}"
+        type: "{{ ssh_keys__ssh_key_type }}"
+        size: "{{ ssh_keys__ssh_key_bits | default(omit, true) }}"
+        passphrase: "{{ __ssh_keys__passphrase | default('') }}"
+        comment: "{{ __ssh_keys__ssh_key_comment }}"
+        mode: "0600"
+        force: true
+      register: __ssh_keys__keypair
+      no_log: true
+      tags:
+        - ssh_keys
+
+    # -----------------------------------------------------------------
+    # 4. Copy SSH keys to output dir
+    # -----------------------------------------------------------------
+
+    - name: Present | Copy SSH private key to output dir
+      ansible.builtin.copy:
+        src: "{{ __ssh_keys__temp_dir.path }}/{{ __ssh_keys__ssh_key_name }}"
+        dest: "{{ __ssh_keys__ssh_private_key_path }}"
+        mode: "0600"
+      no_log: true
+      tags:
+        - ssh_keys
+
+    - name: Present | Copy SSH public key to output dir
+      ansible.builtin.copy:
+        src: >-
+          {{ __ssh_keys__temp_dir.path }}/{{ __ssh_keys__ssh_key_name }}.pub
+        dest: "{{ __ssh_keys__ssh_public_key_path }}"
+        mode: "0600"
+      no_log: true
+      tags:
+        - ssh_keys
+
+    # -----------------------------------------------------------------
+    # 5. Slurp SSH private key content (if ssh_key_in_sops)
+    # -----------------------------------------------------------------
+
+    - name: Present | Slurp SSH private key content
+      ansible.builtin.slurp:
+        src: "{{ __ssh_keys__temp_dir.path }}/{{ __ssh_keys__ssh_key_name }}"
+      register: __ssh_keys__private_key_slurp
+      when:
+        - __ssh_keys__do_ssh_key_in_sops | bool
+      no_log: true
+      tags:
+        - ssh_keys
+
+    # -----------------------------------------------------------------
+    # 6. Build secrets data structure
+    # -----------------------------------------------------------------
+    # Additive schema: ssh_private_key_path is always present.
+    # ssh_passphrase included only when a passphrase was generated.
+    # ssh_private_key included only when ssh_key_in_sops is true.
+    # metadata included only when the user provides non-empty metadata.
+
+    # set_fact permitted: depends on multiple registers and set_facts.
+    - name: Present | Build secrets data
+      ansible.builtin.set_fact:
+        __ssh_keys__secrets_data: >-
+          {{
+            {
+              'username': __ssh_keys__item.username,
+              'ssh_key_name': __ssh_keys__ssh_key_name,
+              'ssh_private_key_path': __ssh_keys__ssh_private_key_path,
+              'ssh_public_key': __ssh_keys__keypair.public_key,
+              'ssh_fingerprint': __ssh_keys__keypair.fingerprint,
+              'ssh_comment': __ssh_keys__ssh_key_comment,
+            }
+            | ansible.builtin.combine(
+                { 'ssh_passphrase': __ssh_keys__passphrase }
+                if (__ssh_keys__passphrase | default('') | length > 0)
+                else {}
+              )
+            | ansible.builtin.combine(
+                { 'ssh_private_key':
+                    __ssh_keys__private_key_slurp.content | b64decode }
+                if (__ssh_keys__do_ssh_key_in_sops | bool)
+                else {}
+              )
+            | ansible.builtin.combine(
+                { 'metadata': __ssh_keys__metadata }
+                if (__ssh_keys__metadata | default({}) | length > 0)
+                else {}
+              )
+          }}
+      when:
+        - __ssh_keys__keypair is not skipped
+      no_log: true
+      tags:
+        - ssh_keys
+
+    # -----------------------------------------------------------------
+    # 7. Encrypt and write SOPS file
+    # -----------------------------------------------------------------
+
+    # Branch 1: explicit age public keys provided
+    - name: Present | Encrypt secrets with SOPS (age keys)
+      community.sops.sops_encrypt:
+        path: "{{ __ssh_keys__sops_file_path }}"
+        content_yaml: "{{ __ssh_keys__secrets_data }}"
+        age: "{{ __ssh_keys__age_public_keys }}"
+        force: "{{ ssh_keys__overwrite | bool }}"
+      when:
+        - __ssh_keys__secrets_data is defined
+        - __ssh_keys__secrets_data | length > 0
+        - __ssh_keys__age_public_keys | length > 0
+      no_log: true
+      tags:
+        - ssh_keys
+
+    # Branch 2: explicit sops config path provided
+    - name: Present | Encrypt secrets with SOPS (config file path)
+      community.sops.sops_encrypt:
+        path: "{{ __ssh_keys__sops_file_path }}"
+        content_yaml: "{{ __ssh_keys__secrets_data }}"
+        config_path: "{{ __ssh_keys__sops_config_path }}"
+        force: "{{ ssh_keys__overwrite | bool }}"
+      when:
+        - __ssh_keys__secrets_data is defined
+        - __ssh_keys__secrets_data | length > 0
+        - __ssh_keys__age_public_keys | length == 0
+        - __ssh_keys__sops_config_path | length > 0
+      no_log: true
+      tags:
+        - ssh_keys
+
+    # Branch 3: SOPS_AGE_RECIPIENTS env var set
+    - name: Present | Encrypt secrets with SOPS (SOPS_AGE_RECIPIENTS env var)
+      community.sops.sops_encrypt:
+        path: "{{ __ssh_keys__sops_file_path }}"
+        content_yaml: "{{ __ssh_keys__secrets_data }}"
+        age: "{{ lookup('env', 'SOPS_AGE_RECIPIENTS') }}"
+        force: "{{ ssh_keys__overwrite | bool }}"
+      when:
+        - __ssh_keys__secrets_data is defined
+        - __ssh_keys__secrets_data | length > 0
+        - __ssh_keys__age_public_keys | length == 0
+        - __ssh_keys__sops_config_path | length == 0
+        - lookup('env', 'SOPS_AGE_RECIPIENTS') | length > 0
+      no_log: true
+      tags:
+        - ssh_keys
+
+    # Branch 4: fallback to automatic .sops.yaml discovery
+    - name: Present | Encrypt secrets with SOPS (auto .sops.yaml discovery)
+      community.sops.sops_encrypt:
+        path: "{{ __ssh_keys__sops_file_path }}"
+        content_yaml: "{{ __ssh_keys__secrets_data }}"
+        force: "{{ ssh_keys__overwrite | bool }}"
+      when:
+        - __ssh_keys__secrets_data is defined
+        - __ssh_keys__secrets_data | length > 0
+        - __ssh_keys__age_public_keys | length == 0
+        - __ssh_keys__sops_config_path | length == 0
+        - lookup('env', 'SOPS_AGE_RECIPIENTS') | length == 0
+      no_log: true
+      tags:
+        - ssh_keys
+
+    # -----------------------------------------------------------------
+    # 8. Wipe sensitive facts from memory
+    # -----------------------------------------------------------------
+
+    - name: Present | Wipe sensitive facts from memory
+      ansible.builtin.set_fact:
+        __ssh_keys__passphrase: ""
+        __ssh_keys__secrets_data: {}
+        __ssh_keys__private_key_slurp: {}
+      no_log: true
+      tags:
+        - ssh_keys
+
+    # -----------------------------------------------------------------
+    # 9. Summary
+    # -----------------------------------------------------------------
+
+    - name: Present | Display summary
+      ansible.builtin.debug:
+        msg:
+          - "Generated files for {{ __ssh_keys__item.username }}:"
+          - "- SOPS file: {{ __ssh_keys__sops_file_path }}"
+          - "- SSH private key: {{ __ssh_keys__ssh_private_key_path }}"
+          - "- SSH public key: {{ __ssh_keys__ssh_public_key_path }}"
+      when:
+        - __ssh_keys__keypair is not skipped
+      tags:
+        - ssh_keys
+
+  # -------------------------------------------------------------------
+  # 10. Always: remove per-user temp directory
+  # -------------------------------------------------------------------
+  always:
+    - name: Present | Remove per-user temp directory
+      ansible.builtin.file:
+        path: "{{ __ssh_keys__temp_dir.path }}"
+        state: absent
+      when:
+        - __ssh_keys__temp_dir is defined
+        - __ssh_keys__temp_dir.path is defined
+      tags:
+        - ssh_keys

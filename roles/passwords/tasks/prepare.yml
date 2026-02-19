@@ -1,0 +1,102 @@
+---
+# devlbo.secrets.passwords - Prepare phase
+#
+# Runs before the present/absent loops. Builds per-user file-existence lookup
+# dicts so that main.yml can gate loop iterations without repeating stat calls
+# inside present.yml or absent.yml.
+#
+# Outputs (play-scoped facts):
+#   __passwords__file_exists  — dict {username: bool}
+
+# ---------------------------------------------------------------------------
+# Stat SOPS files for all users
+# ---------------------------------------------------------------------------
+
+- name: Prepare | Stat SOPS file for each user
+  ansible.builtin.stat:
+    path: "{{ __passwords__sops_file_path }}"
+  loop: "{{ passwords__users }}"
+  loop_control:
+    loop_var: __passwords__item
+    label: "{{ __passwords__item.username }}"
+  register: __passwords__stat_results
+  tags:
+    - passwords
+
+# set_fact permitted: depends on __passwords__stat_results register.
+- name: Prepare | Build file-existence lookup dict
+  ansible.builtin.set_fact:
+    __passwords__file_exists: >-
+      {{
+        dict(
+          passwords__users | map(attribute='username')
+          | zip(
+              __passwords__stat_results.results
+              | map(attribute='stat')
+              | map(attribute='exists')
+            )
+        )
+      }}
+  tags:
+    - passwords
+
+# ---------------------------------------------------------------------------
+# Emit skip messages (present users whose file already exists, overwrite=false)
+# ---------------------------------------------------------------------------
+
+- name: Prepare | Skip present tasks — SOPS file exists
+  ansible.builtin.debug:
+    msg:
+      - SOPS file '{{ __passwords__sops_filename }}' already exists.
+      - Set passwords__overwrite=true to overwrite.
+  loop: "{{ passwords__users }}"
+  loop_control:
+    loop_var: __passwords__item
+    label: "{{ __passwords__item.username }}"
+  when:
+    - passwords__state == 'present'
+    - (__passwords__item.state | default('present')) == 'present'
+    - __passwords__file_exists[__passwords__item.username]
+    - not (passwords__overwrite | bool)
+  tags:
+    - passwords
+
+# ---------------------------------------------------------------------------
+# Emit absent dry-run warnings (absent users whose file exists but
+# confirm_absent=false)
+# ---------------------------------------------------------------------------
+
+- name: Prepare | Skip absent tasks — confirm_absent required to delete
+  ansible.builtin.debug:
+    msg:
+      - "[passwords] DRY RUN: would delete the following files:"
+      - "{{ __passwords__sops_file_path }}."
+      - >-
+        Set passwords__confirm_absent=true (or per-user confirm_absent: true)
+        to allow deletion.
+  loop: "{{ passwords__users }}"
+  loop_control:
+    loop_var: __passwords__item
+    label: "{{ __passwords__item.username }}"
+  when:
+    - >-
+      passwords__state == 'absent'
+      or (__passwords__item.state | default('present')) == 'absent'
+    - __passwords__file_exists[__passwords__item.username]
+    - not ((__passwords__item.confirm_absent
+            | default(passwords__confirm_absent)) | bool)
+  tags:
+    - passwords
+
+# ---------------------------------------------------------------------------
+# Create output directory (when at least one present user will be processed)
+# ---------------------------------------------------------------------------
+
+- name: Prepare | Create output directory
+  ansible.builtin.file:
+    path: "{{ passwords__output_dir }}"
+    state: directory
+    mode: "0700"
+  when: __passwords__has_present_users | bool
+  tags:
+    - passwords

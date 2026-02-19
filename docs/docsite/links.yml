@@ -1,0 +1,10 @@
+---
+edit_on_github:
+  repository: https://github.com/devlbo/ansible-collection-secrets
+  branch: main
+  path_prefix: ""
+
+communication:
+  - title: GitHub Issues
+    url: https://github.com/devlbo/ansible-collection-secrets/issues
+    description: Report bugs or request features

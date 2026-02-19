@@ -1,0 +1,28 @@
+---
+# devlbo.secrets - Provision SSH keys
+#
+# Generates SSH keypairs with optional passphrase protection for a list of
+# users, then encrypts key metadata into per-user SOPS YAML files using
+# age keys.
+#
+# No SSH Keys are generated if `ssh_keys__users` list is empty.
+#
+# Usage:
+#   # Minimal — uses .sops.yaml config for age keys
+#   ansible-playbook devlbo.secrets.provision_ssh_keys
+#
+#   # With age keys and custom users
+#   ansible-playbook devlbo.secrets.provision_ssh_keys \
+#     -e @vars/my_users.yml
+#
+#   # Overwrite existing files
+#   ansible-playbook devlbo.secrets.provision_ssh_keys \
+#     -e ssh_keys__overwrite=true
+
+- name: Provision SSH keys
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  roles:
+    - role: devlbo.secrets.ssh_keys

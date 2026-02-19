@@ -1,0 +1,46 @@
+---
+# devlbo.secrets.ssh_keys - Converge to absent state (per user)
+#
+# This file is included once per user from main.yml.
+# Entry is gated by main.yml: only runs when at least one file exists
+# and confirm_absent=true (global or per-user).
+# Per-file when: guards use the prepare.yml lookup dicts so we only
+# attempt deletion of files that actually exist.
+#
+# Per-user filenames (__ssh_keys__sops_filename, __ssh_keys__ssh_key_name)
+# are lazy expressions in vars/main.yml. They resolve automatically for the
+# current __ssh_keys__item — no set_fact needed.
+
+- name: Absent | Remove SOPS file
+  ansible.builtin.file:
+    path: "{{ __ssh_keys__sops_file_path }}"
+    state: absent
+  when: __ssh_keys__sops_exists[__ssh_keys__item.username]
+  tags:
+    - ssh_keys
+
+- name: Absent | Remove SSH private key
+  ansible.builtin.file:
+    path: "{{ __ssh_keys__ssh_private_key_path }}"
+    state: absent
+  when: __ssh_keys__priv_exists[__ssh_keys__item.username]
+  tags:
+    - ssh_keys
+
+- name: Absent | Remove SSH public key
+  ansible.builtin.file:
+    path: "{{ __ssh_keys__ssh_public_key_path }}"
+    state: absent
+  when: __ssh_keys__pub_exists[__ssh_keys__item.username]
+  tags:
+    - ssh_keys
+
+- name: Absent | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "Removed files for {{ __ssh_keys__item.username }}:"
+      - "- SOPS file: {{ __ssh_keys__sops_file_path }}"
+      - "- SSH private key: {{ __ssh_keys__ssh_private_key_path }}"
+      - "- SSH public key: {{ __ssh_keys__ssh_public_key_path }}"
+  tags:
+    - ssh_keys

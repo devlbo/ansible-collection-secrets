@@ -1,0 +1,167 @@
+---
+# devlbo.secrets.passwords - Converge to present state (per user)
+#
+# This file is included once per user from main.yml.
+# The current user is available as __passwords__item.
+# Entry is gated by main.yml: only runs when the file does not exist
+# or passwords__overwrite=true.
+#
+# Flow:
+#   1. Generate password + hash
+#   2. Build secrets data structure
+#   3. Encrypt and write SOPS file via community.sops.sops_encrypt
+#   4. Wipe sensitive facts from memory
+#   5. Summary
+
+# ---------------------------------------------------------------------------
+# 1. Generate password + hash
+# ---------------------------------------------------------------------------
+
+# set_fact permitted: lookup('random_string') is non-idempotent.
+- name: Present | Generate random password
+  ansible.builtin.set_fact:
+    __passwords__password: >-
+      {{
+        lookup(
+          'community.general.random_string',
+          length=passwords__password_length | int,
+          min_lower=passwords__password_min_lower | int,
+          min_upper=passwords__password_min_upper | int,
+          min_numeric=passwords__password_min_numeric | int,
+          min_special=passwords__password_min_special | int,
+          override_special=passwords__password_special_chars
+        )
+      }}
+  no_log: true
+  tags:
+    - passwords
+
+# set_fact permitted: depends on __passwords__password set_fact.
+- name: Present | Generate password hash
+  ansible.builtin.set_fact:
+    __passwords__password_hash: >-
+      {{ __passwords__password
+         | password_hash(passwords__password_hash_algorithm) }}
+  no_log: true
+  tags:
+    - passwords
+
+# ---------------------------------------------------------------------------
+# 2. Build secrets data structure
+# ---------------------------------------------------------------------------
+
+# set_fact permitted: depends on __passwords__password and
+# __passwords__password_hash set_fact values (register-dependent chain).
+- name: Present | Build secrets data structure
+  ansible.builtin.set_fact:
+    __passwords__secrets_data: >-
+      {{
+        {
+          'username': __passwords__item.username,
+          'password': __passwords__password,
+          'password_hash': __passwords__password_hash,
+        }
+        | ansible.builtin.combine(
+            { 'metadata': __passwords__metadata }
+            if (__passwords__metadata | length > 0)
+            else {}
+          )
+      }}
+  no_log: true
+  tags:
+    - passwords
+
+# ---------------------------------------------------------------------------
+# 3. Encrypt and write SOPS file
+# ---------------------------------------------------------------------------
+
+# Branch 1: explicit age public keys provided
+- name: Present | Encrypt secrets with SOPS (age keys)
+  community.sops.sops_encrypt:
+    path: "{{ __passwords__sops_file_path }}"
+    content_yaml: "{{ __passwords__secrets_data }}"
+    age: "{{ __passwords__age_public_keys }}"
+    force: "{{ passwords__overwrite | bool }}"
+  when:
+    - __passwords__secrets_data is defined
+    - __passwords__secrets_data | length > 0
+    - __passwords__age_public_keys | length > 0
+  no_log: true
+  tags:
+    - passwords
+
+# Branch 2: explicit sops config path provided
+- name: Present | Encrypt secrets with SOPS (config file path)
+  community.sops.sops_encrypt:
+    path: "{{ __passwords__sops_file_path }}"
+    content_yaml: "{{ __passwords__secrets_data }}"
+    config_path: "{{ __passwords__sops_config_path }}"
+    force: "{{ passwords__overwrite | bool }}"
+  when:
+    - __passwords__secrets_data is defined
+    - __passwords__secrets_data | length > 0
+    - __passwords__age_public_keys | length == 0
+    - __passwords__sops_config_path | length > 0
+  no_log: true
+  tags:
+    - passwords
+
+# Branch 3: SOPS_AGE_RECIPIENTS env var set
+- name: Present | Encrypt secrets with SOPS (SOPS_AGE_RECIPIENTS env var)
+  community.sops.sops_encrypt:
+    path: "{{ __passwords__sops_file_path }}"
+    content_yaml: "{{ __passwords__secrets_data }}"
+    age: "{{ lookup('env', 'SOPS_AGE_RECIPIENTS') }}"
+    force: "{{ passwords__overwrite | bool }}"
+  when:
+    - __passwords__secrets_data is defined
+    - __passwords__secrets_data | length > 0
+    - __passwords__age_public_keys | length == 0
+    - __passwords__sops_config_path | length == 0
+    - lookup('env', 'SOPS_AGE_RECIPIENTS') | length > 0
+  no_log: true
+  tags:
+    - passwords
+
+# Branch 4: fallback to automatic .sops.yaml discovery
+- name: Present | Encrypt secrets with SOPS (auto .sops.yaml discovery)
+  community.sops.sops_encrypt:
+    path: "{{ __passwords__sops_file_path }}"
+    content_yaml: "{{ __passwords__secrets_data }}"
+    force: "{{ passwords__overwrite | bool }}"
+  when:
+    - __passwords__secrets_data is defined
+    - __passwords__secrets_data | length > 0
+    - __passwords__age_public_keys | length == 0
+    - __passwords__sops_config_path | length == 0
+    - lookup('env', 'SOPS_AGE_RECIPIENTS') | length == 0
+  no_log: true
+  tags:
+    - passwords
+
+# ---------------------------------------------------------------------------
+# 4. Wipe sensitive facts from memory
+# ---------------------------------------------------------------------------
+# After encryption, overwrite sensitive variables with empty strings to
+# prevent them from persisting in Ansible's variable scope for the rest
+# of the play.
+
+- name: Present | Wipe sensitive facts from memory
+  ansible.builtin.set_fact:
+    __passwords__password: ""
+    __passwords__password_hash: ""
+    __passwords__secrets_data: {}
+  no_log: true
+  tags:
+    - passwords
+
+# ---------------------------------------------------------------------------
+# 5. Summary
+# ---------------------------------------------------------------------------
+
+- name: Present | Display summary
+  ansible.builtin.debug:
+    msg:
+      - "SOPS file generated: {{ __passwords__sops_file_path }}"
+  tags:
+    - passwords
