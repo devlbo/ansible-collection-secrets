@@ -112,7 +112,7 @@ jobs:
         run: ansible-galaxy collection build --force
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: collection-tarball
           path: devlbo-secrets-*.tar.gz
