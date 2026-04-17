@@ -162,7 +162,7 @@ jobs:
           --api-key "${{ secrets.GALAXY_API_KEY }}"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: devlbo-secrets-*.tar.gz
           generate_release_notes: true
